@@ -237,6 +237,123 @@ class PressureTest {
         assertEquals(null, gone.delta[2])
     }
 
+    @Test fun uncalledReturnDoesNotMakeTheLoserSafe() {
+        // Seat 0 covers both, loses every pot, and only gets the unmatched shove back.
+        // Seat 1 (AA, short) wins the main pot. Seat 2 (KK) wins the side pot.
+        val e = HandEngine(
+            HandSetup(50, 100, 0, 0, listOf(SeatSetup(0, "P0", 1000), SeatSetup(1, "P1", 300), SeatSetup(2, "P2", 600))),
+            PresetCardSource(
+                mapOf(0 to Cards.parseMany("7c2d"), 1 to Cards.parseMany("AsAh"), 2 to Cards.parseMany("KsKh")),
+                Cards.parseMany("QdJd9c4s3h"),
+            ),
+        )
+        e.apply(Move.raiseTo(1000))
+        e.apply(Move.CALL)
+        e.apply(Move.CALL)
+        while (e.phase == Phase.STREET_DONE) e.dealNextStreet()
+        val r = assertNotNull(e.result)
+        assertTrue((r.won[0] ?: 0) > 0, "uncalled chips came back to the losing bettor, won=${r.won}")
+        assertEquals(setOf(1, 2), Squid.potWinners(r))
+        assertTrue(0 !in Squid.potWinners(r))
+
+        val total = e.players.sumOf { it.stack }
+        val s = GameSession(SessionConfig(GameMode.CASH, 3, 10, TableType.GTO, seed = 1, squid = SquidRules(1, 1.0)))
+        s.completeHand(e)
+        val settlement = assertNotNull(s.lastSquidSettlement)
+        assertEquals(setOf(1, 2), settlement.safe)
+        assertEquals(setOf(0), settlement.unsafe)
+        assertEquals(0, settlement.delta.values.sum())
+        assertEquals(total, s.players.sumOf { it.stack })
+        assertTrue((settlement.delta[0] ?: 0) < 0)
+    }
+
+    @Test fun sidePotSplitAndFoldWinners() {
+        // Side pot: smallest stack has the best hand, the oversized bettor wins the side pot
+        // and also receives an uncalled return. Both are pot winners. The middle stack is not.
+        val side = HandEngine(
+            HandSetup(50, 100, 0, 0, listOf(SeatSetup(0, "P0", 1000), SeatSetup(1, "P1", 300), SeatSetup(2, "P2", 600))),
+            PresetCardSource(
+                mapOf(0 to Cards.parseMany("KsKh"), 1 to Cards.parseMany("AsAh"), 2 to Cards.parseMany("QsQh")),
+                Cards.parseMany("2c7d9hJc3d"),
+            ),
+        )
+        side.apply(Move.raiseTo(1000))
+        side.apply(Move.CALL)
+        side.apply(Move.CALL)
+        while (side.phase == Phase.STREET_DONE) side.dealNextStreet()
+        val sideResult = assertNotNull(side.result)
+        assertEquals(600 + 400, sideResult.won[0])
+        assertEquals(setOf(0, 1), Squid.potWinners(sideResult))
+        assertTrue(2 !in Squid.potWinners(sideResult))
+        assertEquals(1900, side.players.sumOf { it.stack })
+
+        // Split: the folder wins nothing. The two live players chop the board.
+        val split = HandEngine(
+            HandSetup(50, 100, 0, 0, listOf(SeatSetup(0, "P0", 1000), SeatSetup(1, "P1", 1000), SeatSetup(2, "P2", 1000))),
+            PresetCardSource(
+                mapOf(0 to Cards.parseMany("2c3d"), 1 to Cards.parseMany("7c8d"), 2 to Cards.parseMany("2h3h")),
+                Cards.parseMany("AsKdQcJsTd"),
+            ),
+        )
+        split.apply(Move.raiseTo(300))
+        split.apply(Move.FOLD)
+        split.apply(Move.CALL)
+        while (split.phase != Phase.HAND_DONE) {
+            if (split.phase == Phase.STREET_DONE) split.dealNextStreet() else split.apply(Move.CHECK)
+        }
+        val splitResult = assertNotNull(split.result)
+        assertEquals(setOf(0, 2), Squid.potWinners(splitResult))
+        assertEquals(0, splitResult.won[1] ?: 0)
+        assertTrue(1 !in Squid.potWinners(splitResult))
+        assertEquals(3000, split.players.sumOf { it.stack })
+
+        // Folded around: the opener wins the pot and also gets the uncalled raise back.
+        // The return does not add any other winner. Folded seats stay unsafe.
+        val folded = HandEngine(
+            HandSetup(50, 100, 0, 0, listOf(SeatSetup(0, "P0", 1000), SeatSetup(1, "P1", 1000), SeatSetup(2, "P2", 1000))),
+            PresetCardSource(
+                mapOf(0 to Cards.parseMany("AsKs"), 1 to Cards.parseMany("2c7d"), 2 to Cards.parseMany("3c8d")),
+                Cards.parseMany("QsJsTs3h4d"),
+            ),
+        )
+        folded.apply(Move.raiseTo(300))
+        folded.apply(Move.FOLD)
+        folded.apply(Move.FOLD)
+        val foldResult = assertNotNull(folded.result)
+        assertTrue((foldResult.uncalledReturned?.second ?: 0) > 0)
+        assertEquals(setOf(0), Squid.potWinners(foldResult))
+        assertEquals(3000, folded.players.sumOf { it.stack })
+
+        val s = GameSession(SessionConfig(GameMode.CASH, 3, 10, TableType.GTO, seed = 2, squid = SquidRules(2, 1.0)))
+        val before = s.players.sumOf { it.stack }
+        s.completeHand(folded)
+        assertEquals(setOf(0), s.squidStatus()!!.safeSeats)
+        assertNull(s.lastSquidSettlement)
+        // Button is seat 1, so seat 1 acts first, raises, and the others fold.
+        // Seat 1 wins the pot (and is handed back the uncalled raise) and becomes safe.
+        // Seat 2 won neither hand, so seat 2 pays when the round closes.
+        val hand2 = HandEngine(
+            HandSetup(50, 100, 0, 1, s.players.map { SeatSetup(it.seat, it.name, it.stack) }),
+            PresetCardSource(
+                mapOf(0 to Cards.parseMany("AsKs"), 1 to Cards.parseMany("QcQd"), 2 to Cards.parseMany("3c8d")),
+                Cards.parseMany("9s8h4c5d6h"),
+            ),
+        )
+        assertEquals(1, hand2.toAct)
+        hand2.apply(Move.raiseTo(300))
+        hand2.apply(Move.FOLD)
+        hand2.apply(Move.FOLD)
+        val endTotal = hand2.players.sumOf { it.stack }
+        s.completeHand(hand2)
+        val settlement = assertNotNull(s.lastSquidSettlement)
+        assertEquals(setOf(0, 1), settlement.safe)
+        assertEquals(setOf(2), settlement.unsafe)
+        assertTrue((settlement.delta[2] ?: 0) < 0)
+        assertEquals(0, settlement.delta.values.sum())
+        assertEquals(endTotal, s.players.sumOf { it.stack })
+        assertEquals(before, endTotal)
+    }
+
     @Test fun sessionAppliesSquidWithoutBreakingRecordsOrChipTotal() {
         fun stacksAfter(squid: SquidRules?, hands: Int, size: Int = 3): Pair<List<Int>, SquidSettlement?> {
             val s = GameSession(SessionConfig(GameMode.CASH, size, 100, TableType.GTO, seed = 4, squid = squid))
@@ -293,7 +410,7 @@ class PressureTest {
             }
             check(++n < 40) { "hand did not finish" }
         }
-        val winners = e.result!!.won.filterValues { it > 0 }.keys
+        val winners = Squid.potWinners(e.result!!)
         s.completeHand(e)
         return winners
     }

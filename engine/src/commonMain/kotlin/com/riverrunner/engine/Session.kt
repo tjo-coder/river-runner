@@ -172,7 +172,7 @@ class GameSession(val config: SessionConfig) {
         lastSquidSettlement = null
         val round = squidRound
         if (round != null) {
-            val winners = result.won.filterValues { it > 0 }.keys
+            val winners = Squid.potWinners(result)
             val closed = round.completeHand(winners)
             if (closed != null) {
                 val aliveStacks = players.filter { it.alive }.associate { it.seat to it.stack }

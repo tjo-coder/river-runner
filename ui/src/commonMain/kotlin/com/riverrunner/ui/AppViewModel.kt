@@ -202,7 +202,10 @@ class AppViewModel(val platform: Platform) : ViewModel() {
     fun setChinese(zh: Boolean) {
         prefs.chinese = zh
         strings = if (zh) ZH else EN
-        session?.let { syncSquid(it) }
+        session?.let { s ->
+            val settled = settledSquid
+            if (settled != null) showSettledSquid(settled) else syncSquid(s)
+        }
     }
     fun setShowBB(v: Boolean) { prefs.showInBB = v; showInBB = v }
     var deckStyle by mutableStateOf(DeckStyle.fromCode(prefs.deckStyle)); private set
@@ -236,8 +239,15 @@ class AppViewModel(val platform: Platform) : ViewModel() {
     private var notice by mutableStateOf<String?>(null)
     private var squidText by mutableStateOf<String?>(null)
     private var squidHeroUnsafe by mutableStateOf(false)
-    /** null = squid off. Seats in the set have won a hand this round. */
+    /** null = squid off. Seats in the set have won a pot this round. */
     private var squidSafeSeats: Set<Int>? = null
+    /**
+     * When set, these seats are the unsafe ones from a round that just settled.
+     * Null means "every live player outside [squidSafeSeats]".
+     */
+    private var squidUnsafeSeats: Set<Int>? = null
+    /** Kept so a language switch on the result still describes the closed round. */
+    private var settledSquid: com.riverrunner.engine.SquidSettlement? = null
     private var lastBlinds: Pair<Int, Int>? = null
     private val log = mutableStateListOf<LogLine>()
     var practice by mutableStateOf(prefs.practiceDefault)
@@ -301,6 +311,8 @@ class AppViewModel(val platform: Platform) : ViewModel() {
         squidText = null
         squidHeroUnsafe = false
         squidSafeSeats = null
+        squidUnsafeSeats = null
+        settledSquid = null
         lastBlinds = null
         table = null
         screen = Screen.Table
@@ -359,13 +371,23 @@ class AppViewModel(val platform: Platform) : ViewModel() {
             }
         } else null
         val safe = squidSafeSeats
+        val unsafe = squidUnsafeSeats
+        val mark = when {
+            safe == null -> null
+            it.seat in safe -> true
+            unsafe != null -> if (it.seat in unsafe) false else null
+            !it.alive -> null
+            else -> false
+        }
         SeatInfo(
             it.seat, if (it.isHuman) strings.you else it.name, it.isHuman, it.stack, !it.alive && it.place > 0, hud,
-            squidSafe = if (safe == null || !it.alive) null else it.seat in safe,
+            squidSafe = mark,
         )
     }
 
     private fun syncSquid(s: GameSession) {
+        settledSquid = null
+        squidUnsafeSeats = null
         val st = s.squidStatus()
         if (st == null) {
             squidText = null
@@ -376,6 +398,20 @@ class AppViewModel(val platform: Platform) : ViewModel() {
             squidHeroUnsafe = s.hero.alive && GameSession.HERO_SEAT !in st.safeSeats
             squidText = strings.squidBanner(st.handsLeft, st.handsPerRound, st.unsafeCount, squidHeroUnsafe)
         }
+    }
+
+    /** Result of a round that just closed: dots match who was paid, not the fresh round. */
+    private fun showSettledSquid(settlement: com.riverrunner.engine.SquidSettlement) {
+        settledSquid = settlement
+        squidSafeSeats = settlement.safe
+        squidUnsafeSeats = settlement.unsafe
+        val heroPaid = when {
+            GameSession.HERO_SEAT in settlement.unsafe -> true
+            GameSession.HERO_SEAT in settlement.safe -> false
+            else -> null
+        }
+        squidHeroUnsafe = heroPaid == true
+        squidText = strings.squidSettled(heroPaid)
     }
 
     /** Penalty chips land on the shown stacks once the hand result is up. */
@@ -551,8 +587,10 @@ class AppViewModel(val platform: Platform) : ViewModel() {
             // ---- hand finished: gather the bets, reveal, then pay the winners
             legal = null
             actingName = null
-            val infosBefore = seatInfos(s)
             val built = s.completeHand(e)
+            val settlement = s.lastSquidSettlement
+            if (settlement != null) showSettledSquid(settlement) else syncSquid(s)
+            val infosNow = seatInfos(s)
             val rec = if (starHand) built.copy(favorite = true) else built
             val store = history
             withContext(IoDispatcher) { store.add(rec) }
@@ -571,12 +609,12 @@ class AppViewModel(val platform: Platform) : ViewModel() {
             val betsOut = e.players.any { it.streetBet > 0 }
             val wasFast = fastForward
             fastForward = false
-            table = TableMapper.build(strings, e, infosBefore, handKey, actionSeq, TableMapper.Stage.COLLECT, { fmt(it, bb) })
+            table = TableMapper.build(strings, e, infosNow, handKey, actionSeq, TableMapper.Stage.COLLECT, { fmt(it, bb) })
             if (betsOut) sfx(Sound.COLLECT, 0.6f)
             val showdown = e.result?.showdown?.isNotEmpty() == true
             if (showdown) sfx(Sound.FLIP, 0.8f)
             delay(if (wasFast) 300L else if (showdown) 1200L else 600L)
-            table = TableMapper.build(strings, e, infosBefore, handKey, actionSeq, TableMapper.Stage.FINAL, { fmt(it, bb) })
+            table = TableMapper.build(strings, e, infosNow, handKey, actionSeq, TableMapper.Stage.FINAL, { fmt(it, bb) })
             applySquidStacks(s)
             s.lastSquidSettlement?.let { settlement ->
                 if (settlement.unsafe.isNotEmpty()) {
@@ -591,8 +629,8 @@ class AppViewModel(val platform: Platform) : ViewModel() {
                 }
             }
             if ((e.result?.net?.get(GameSession.HERO_SEAT) ?: 0) > 0) sfx(Sound.WIN, 0.8f) else sfx(Sound.COLLECT, 0.7f)
-            TableMapper.resultBanner(strings, e, infosBefore) { fmt(it, bb) }?.let { log += LogLine(LogKind.RESULT, it) }
-            handOver = TableMapper.handOver(strings, e, infosBefore, GameSession.HERO_SEAT)
+            TableMapper.resultBanner(strings, e, infosNow) { fmt(it, bb) }?.let { log += LogLine(LogKind.RESULT, it) }
+            handOver = TableMapper.handOver(strings, e, infosNow, GameSession.HERO_SEAT)
             sessionOver = s.isOver
             fastForward = false
             if (!quitRequested) {

@@ -95,6 +95,14 @@ class SquidTracker(val rules: SquidRules) {
 object Squid {
 
     /**
+     * Seats that won a pot. Uncalled chips returned to a bettor are not a win:
+     * [HandResult.won] includes that return, so a player who lost the pot can
+     * still have a positive entry there.
+     */
+    fun potWinners(result: HandResult): Set<Int> =
+        result.pots.filter { it.amount > 0 }.flatMap { it.winners }.toSet()
+
+    /**
      * Each alive unsafe player pays up to [penaltyBb] big blinds. What is
      * actually taken (never more than the stack) is split evenly across the
      * alive safe players. Leftover chips, one each, go to the lowest seat

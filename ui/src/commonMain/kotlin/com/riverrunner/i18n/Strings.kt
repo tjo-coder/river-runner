@@ -231,6 +231,11 @@ data class Strings(
     val squidBanner: (Int, Int, Int, Boolean) -> String,
     /** payer names, penalty amount already formatted */
     val squidPaid: (String, String) -> String,
+    /**
+     * Shown on the hand result when the round just settled.
+     * true = hero paid, false = hero was safe, null = hero was not in the round.
+     */
+    val squidSettled: (Boolean?) -> String,
     /** round length in hands (0 = one orbit), penalty in big blinds */
     val squidSummary: (Int, Int) -> String,
     val deckStyle: String,
@@ -493,6 +498,13 @@ val ZH = Strings(
         "鱿鱼 剩${left}/${total}手 · ${unsafe}人未安全 · " + if (heroUnsafe) "你未安全" else "你已安全"
     },
     squidPaid = { names, amount -> "鱿鱼结算：$names 各付最多 $amount 给本轮赢过牌的玩家" },
+    squidSettled = { paid ->
+        when (paid) {
+            true -> "鱿鱼本轮已结算 · 你付了罚金"
+            false -> "鱿鱼本轮已结算 · 你本轮安全"
+            null -> "鱿鱼本轮已结算"
+        }
+    },
     squidSummary = { hands, pen ->
         if (hands <= 0) "鱿鱼局：一整圈为一轮，未安全的人各付 $pen BB"
         else "鱿鱼局：每 $hands 手一轮，未安全的人各付 $pen BB"
@@ -754,6 +766,13 @@ val EN = Strings(
         "Squid $left/$total left · $unsafe at risk · " + if (heroUnsafe) "you are at risk" else "you are safe"
     },
     squidPaid = { names, amount -> "Squid: $names each pay up to $amount to players who won a hand" },
+    squidSettled = { paid ->
+        when (paid) {
+            true -> "Squid round settled · you paid"
+            false -> "Squid round settled · you were safe"
+            null -> "Squid round settled"
+        }
+    },
     squidSummary = { hands, pen ->
         if (hands <= 0) "Squid: one orbit per round, each at-risk player pays $pen BB"
         else "Squid: every $hands hands, each at-risk player pays $pen BB"
