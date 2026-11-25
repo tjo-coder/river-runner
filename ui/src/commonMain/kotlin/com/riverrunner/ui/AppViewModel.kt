@@ -18,6 +18,8 @@ import com.riverrunner.engine.AchievementDef
 import com.riverrunner.engine.BotStyle
 import com.riverrunner.engine.Deviation
 import com.riverrunner.engine.DeviationTally
+import com.riverrunner.engine.Export
+import com.riverrunner.engine.SquidHandNote
 import com.riverrunner.engine.SeatStats
 import com.riverrunner.engine.SeatStatsCalc
 import com.riverrunner.engine.Stats
@@ -278,6 +280,9 @@ class AppViewModel(val platform: Platform) : ViewModel() {
     private var lastRecordId: Long? = null
     /** Hands of the current session (for the HUD and "replay last hand"). */
     private val sessionRecords = ArrayList<HandRecord>()
+    private val sessionSquid = HashMap<Long, SquidHandNote>()
+    var exportNotice by mutableStateOf<String?>(null)
+    private var exportBody: String? = null
     private var lastSessionRecord by mutableStateOf<HandRecord?>(null)
     private var hudStats: Map<Int, SeatStats> = emptyMap()
     private var tally = DeviationTally()
@@ -299,6 +304,9 @@ class AppViewModel(val platform: Platform) : ViewModel() {
         starHand = false
         lastRecordId = null
         sessionRecords.clear()
+        sessionSquid.clear()
+        exportNotice = null
+        exportBody = null
         lastSessionRecord = null
         hudStats = emptyMap()
         tally = DeviationTally()
@@ -396,8 +404,16 @@ class AppViewModel(val platform: Platform) : ViewModel() {
         } else {
             squidSafeSeats = st.safeSeats
             squidHeroUnsafe = s.hero.alive && GameSession.HERO_SEAT !in st.safeSeats
-            squidText = strings.squidBanner(st.handsLeft, st.handsPerRound, st.unsafeCount, squidHeroUnsafe)
+            squidText = strings.squidBanner(st.handsLeft, st.handsPerRound, st.unsafeCount, squidHeroUnsafe) +
+                squidAmountSuffix(s)
         }
+    }
+
+    private fun squidAmountSuffix(s: GameSession): String {
+        val chips = s.squidPenaltyChips(GameSession.HERO_SEAT)
+        val bb = if (chips % GameSession.BASE_BB == 0) (chips / GameSession.BASE_BB).toString()
+        else Fmt.fixed(chips.toDouble() / GameSession.BASE_BB, 1)
+        return " · " + strings.squidAmount(chips, bb)
     }
 
     /** Result of a round that just closed: dots match who was paid, not the fresh round. */
@@ -411,7 +427,8 @@ class AppViewModel(val platform: Platform) : ViewModel() {
             else -> null
         }
         squidHeroUnsafe = heroPaid == true
-        squidText = strings.squidSettled(heroPaid)
+        val s = session
+        squidText = strings.squidSettled(heroPaid) + if (s == null) "" else squidAmountSuffix(s)
     }
 
     /** Penalty chips land on the shown stacks once the hand result is up. */
@@ -587,7 +604,12 @@ class AppViewModel(val platform: Platform) : ViewModel() {
             // ---- hand finished: gather the bets, reveal, then pay the winners
             legal = null
             actingName = null
+            val squidBefore = s.squidStatus()
             val built = s.completeHand(e)
+            s.squidHandNote(squidBefore, s.lastSquidSettlement)?.let { note ->
+                sessionSquid[built.id] = note
+                platform.files.append("squid_${profile.id}.txt", "${built.id}\t${note.encode()}\n")
+            }
             val settlement = s.lastSquidSettlement
             if (settlement != null) showSettledSquid(settlement) else syncSquid(s)
             val infosNow = seatInfos(s)
@@ -621,7 +643,10 @@ class AppViewModel(val platform: Platform) : ViewModel() {
                     val names = settlement.unsafe.sorted().joinToString(if (strings.isZh) "、" else ", ") { seat ->
                         if (seat == GameSession.HERO_SEAT) strings.you else s.players[seat].name
                     }
-                    val text = strings.squidPaid(names, fmt(settlement.penaltyChips, bb))
+                    val chips = settlement.penaltyChips
+                    val openingBb = if (chips % GameSession.BASE_BB == 0) (chips / GameSession.BASE_BB).toString()
+                    else Fmt.fixed(chips.toDouble() / GameSession.BASE_BB, 1)
+                    val text = strings.squidPaid(names, strings.squidAmount(chips, openingBb))
                     notice = text
                     log += LogLine(LogKind.RESULT, text)
                     val shown = notice
@@ -678,4 +703,51 @@ class AppViewModel(val platform: Platform) : ViewModel() {
     }
 
     fun actionLabel(a: Action, bb: Int): String = TableMapper.actionLabel(strings, a) { fmt(it, bb) }
+
+    fun exportHistory(starredOnly: Boolean) {
+        val hands = history.all().let { if (starredOnly) it.filter { r -> r.favorite } else it }
+        val json = Export.history(
+            hands, loadSquidNotes(), platform.appVersion, nowMillis(),
+            profile.id, profile.name, if (starredOnly) "starred" else "all",
+        )
+        deliverExport(json, if (starredOnly) "river-runner-starred.json" else "river-runner-hands.json")
+    }
+
+    fun exportThisSession(heroProfit: Double, handsPlayed: Int) {
+        val s = session ?: return
+        val json = Export.session(
+            sessionRecords.toList(), sessionSquid.toMap(), platform.appVersion, nowMillis(),
+            profile.id, profile.name, s.config, s.players, heroProfit, handsPlayed,
+        )
+        deliverExport(json, "river-runner-session.json")
+    }
+
+    fun copyLastExport() {
+        val body = exportBody ?: return
+        exportNotice = if (platform.copyExport(body)) strings.exportCopied else strings.exportFailed
+    }
+
+    private fun deliverExport(json: String, filename: String) {
+        exportBody = json
+        exportNotice = when (platform.deliverExport(filename, json)) {
+            "download" -> strings.exportDownloaded
+            "share" -> strings.exportShared
+            "copy" -> strings.exportCopied
+            "saved" -> strings.exportSaved
+            else -> strings.exportFailed
+        }
+    }
+
+    private fun loadSquidNotes(): Map<Long, SquidHandNote> {
+        val text = platform.files.read("squid_${profile.id}.txt") ?: return emptyMap()
+        val map = HashMap<Long, SquidHandNote>()
+        for (line in text.lineSequence()) {
+            if (line.isBlank()) continue
+            val tab = line.indexOf('\t')
+            if (tab <= 0) continue
+            val id = line.substring(0, tab).toLongOrNull() ?: continue
+            SquidHandNote.decode(line.substring(tab + 1))?.let { map[id] = it }
+        }
+        return map
+    }
 }

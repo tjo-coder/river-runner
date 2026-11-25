@@ -17,6 +17,10 @@ the GitHub release notes; the in-app "What's new" reads this file too.
 ### 修复 | Fixed
 - 鱿鱼：只把赢到池子的人算作安全。加注没有被跟满、退回的筹码不算赢下一手，输了池子的人不会因此免罚 | Squid: only a player who won a pot is safe. Chips returned from an unmatched bet are not a win, so the player who lost the pot still owes the penalty
 
+### 新增 | Added
+- 鱿鱼罚金改为开局筹码的 2%、5% 或 10%，新练习默认 5%。筹码在开局时定死，涨盲不会把罚金变大。以前保存的固定大盲不会被当成百分比 | Squid penalty is 2%, 5% or 10% of the starting stack. New sessions default to 5%. The chip amount is fixed at the start, so rising blinds do not increase it. An older saved blind penalty is not read as a percent
+- 练习记录可以导出成 JSON 文件，留在自己的设备上，不会上传 | Practice hands can be exported as a JSON file that stays on your device and is not uploaded
+
 ### 改进 | Changed
 - 网页版资源使用相对路径，可以挂在 GitHub Pages 的项目网址下（例如 username.github.io/river-runner/） | Web assets use relative paths, so the app loads from a GitHub Pages project URL such as username.github.io/river-runner/
 

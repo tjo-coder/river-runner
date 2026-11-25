@@ -22,6 +22,15 @@ interface Platform {
     val systemChinese: Boolean
     /** CHANGELOG.md of this build, or "" when it is not available. */
     fun changelogText(): String
+
+    /**
+     * Gives [text] to the user as a file. Returns download, share, copy, saved, or fail.
+     * Nothing is uploaded.
+     */
+    fun deliverExport(filename: String, text: String): String
+
+    /** Copies [text] to the clipboard. False when the platform cannot. */
+    fun copyExport(text: String): Boolean
 }
 
 interface Settings {

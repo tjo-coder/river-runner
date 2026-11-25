@@ -144,10 +144,20 @@ private fun lastConfig(p: Prefs) = SessionConfig(
     mode = p.lastMode, tableSize = p.lastSize, startingBB = p.lastStackBB, tableType = p.lastTableType,
     handsPerLevel = p.lastHandsPerLevel, cashAnteFraction = if (p.lastAnte) 0.125 else 0.0,
     styleMix = p.lastStyleMix,
-    squid = if (p.squidEnabled) {
-        SquidRules(if (p.squidHands > 0) p.squidHands else p.lastSize, p.squidPenaltyBb.toDouble())
-    } else null,
+    squid = p.squidRules(p.lastSize),
 )
+
+@Composable
+private fun ExportDialog(vm: AppViewModel) {
+    val notice = vm.exportNotice ?: return
+    val st = LocalStrings.current
+    AlertDialog(
+        onDismissRequest = { vm.exportNotice = null },
+        confirmButton = { TextButton({ vm.copyLastExport() }) { Text(st.exportCopy) } },
+        dismissButton = { TextButton({ vm.exportNotice = null }) { Text(st.exportClose) } },
+        text = { Text(notice + "\n\n" + st.exportLimit) },
+    )
+}
 
 @Composable
 private fun NavItem(text: String, modifier: Modifier, onClick: () -> Unit) {
@@ -173,8 +183,9 @@ fun SetupScreen(vm: AppViewModel) {
             if (c.tableType == TableType.MIXED) p.lastStyleMix = c.styleMix
             p.squidEnabled = c.squid != null
             c.squid?.let {
-                p.squidPenaltyBb = it.penaltyBb.toInt().coerceIn(1, 20)
                 p.squidHands = if (it.handsPerRound == c.tableSize) 0 else it.handsPerRound
+                val pct = it.penaltyPercent
+                if (pct != null) p.squidPercent = pct
             }
             vm.startGame(c)
         },
@@ -195,7 +206,10 @@ fun SetupContent(initial: SessionConfig, onBack: () -> Unit, onStart: (SessionCo
     var squidHands by remember {
         mutableIntStateOf(initial.squid?.let { if (it.handsPerRound == initial.tableSize) 0 else it.handsPerRound } ?: 0)
     }
-    var squidPen by remember { mutableIntStateOf(initial.squid?.penaltyBb?.toInt() ?: 1) }
+    val openingSquid = initial.squid
+    var squidPct by remember { mutableIntStateOf(openingSquid?.penaltyPercent ?: com.riverrunner.engine.SquidRules.DEFAULT_PERCENT) }
+    /** True when this save still uses the older fixed-blind penalty and the player has not picked a percent. */
+    var squidLegacy by remember { mutableStateOf(openingSquid != null && openingSquid.penaltyPercent == null) }
     // mixed-table line-up: a preset, or null for the custom counts in `custom`
     val initMix = initial.styleMix
     var preset by remember {
@@ -276,7 +290,7 @@ fun SetupContent(initial: SessionConfig, onBack: () -> Unit, onStart: (SessionCo
                 }
                 OptionRow(st.squidMode) {
                     Pill(st.squidOff, !squid, { squid = false })
-                    Pill(st.squidOn, squid, { squid = true })
+                    Pill(st.squidOn, squid, { if (!squid) squidLegacy = false; squid = true })
                 }
                 if (squid) {
                     Text(st.squidHint, color = Palette.TextDim, fontSize = 12.sp, lineHeight = 17.sp)
@@ -284,9 +298,16 @@ fun SetupContent(initial: SessionConfig, onBack: () -> Unit, onStart: (SessionCo
                         Pill(st.squidOrbit, squidHands == 0, { squidHands = 0 })
                         for (h in listOf(4, 6, 8, 10)) Pill("$h", squidHands == h, { squidHands = h })
                     }
+                    if (squidLegacy) Text(st.squidLegacyNote, color = Palette.Gold, fontSize = 12.sp, lineHeight = 17.sp)
                     OptionRow(st.squidPenalty) {
-                        for (pen in listOf(1, 2, 5)) Pill("$pen BB", squidPen == pen, { squidPen = pen })
+                        Text(st.squidPercentOf, color = Palette.TextDim, fontSize = 12.sp, modifier = Modifier.padding(top = 10.dp))
+                        for (pen in com.riverrunner.engine.SquidRules.PERCENT_CHOICES) {
+                            Pill("$pen%", !squidLegacy && squidPct == pen, { squidLegacy = false; squidPct = pen })
+                        }
                     }
+                    val chips = if (squidLegacy) ((initial.squid?.penaltyBb ?: 1.0) * 100).toInt() else stackBB * squidPct
+                    val bbText = if (chips % 100 == 0) (chips / 100).toString() else Fmt.fixed(chips / 100.0, 1)
+                    Text(st.squidAmount(chips, bbText), color = Palette.Text, fontSize = 12.sp)
                 }
             }
         }
@@ -309,7 +330,12 @@ fun SetupContent(initial: SessionConfig, onBack: () -> Unit, onStart: (SessionCo
                 Text("${st.lineup}: $lineupText", color = Palette.Text.copy(alpha = 0.85f), fontSize = 13.sp, lineHeight = 19.sp)
             }
             if (squid) {
-                Text(st.squidSummary(squidHands, squidPen), color = Palette.Gold, fontSize = 13.sp, lineHeight = 19.sp)
+                val pct = if (squidLegacy) 0 else squidPct
+                val line = if (squidLegacy) st.squidLegacyNote else st.squidSummary(squidHands, pct)
+                Text(line, color = Palette.Gold, fontSize = 13.sp, lineHeight = 19.sp)
+                val chips = if (squidLegacy) ((initial.squid?.penaltyBb ?: 1.0) * 100).toInt() else stackBB * squidPct
+                val bbText = if (chips % 100 == 0) (chips / 100).toString() else Fmt.fixed(chips / 100.0, 1)
+                Text(st.squidAmount(chips, bbText), color = Palette.Text, fontSize = 13.sp, lineHeight = 19.sp)
             }
             Spacer(Modifier.weight(1f))
             ActionButton(st.start, Palette.Gold, textColor = Palette.Ink, modifier = Modifier.fillMaxWidth().height(52.dp)) {
@@ -318,7 +344,11 @@ fun SetupContent(initial: SessionConfig, onBack: () -> Unit, onStart: (SessionCo
                         mode = mode, tableSize = size, startingBB = stackBB, tableType = table,
                         handsPerLevel = hpl, cashAnteFraction = if (ante) 0.125 else 0.0,
                         styleMix = if (table == TableType.MIXED) chosenMix else null,
-                        squid = if (squid) SquidRules(if (squidHands == 0) size else squidHands, squidPen.toDouble()) else null,
+                        squid = if (!squid) null else {
+                            val hands = if (squidHands == 0) size else squidHands
+                            if (squidLegacy) SquidRules(hands, penaltyBb = initial.squid?.penaltyBb ?: 1.0)
+                            else SquidRules(hands, penaltyPercent = squidPct)
+                        },
                     )
                 )
             }
@@ -398,7 +428,11 @@ fun ResultScreen(
             )
             Text("${st.handsPlayed}: ${summary.handsPlayed}", color = Palette.Text, fontSize = 14.sp)
             Spacer(Modifier.weight(1f))
+            ActionButton(st.exportSession, Palette.PanelHi, modifier = Modifier.fillMaxWidth()) {
+                vm.exportThisSession(summary.heroProfit, summary.handsPlayed)
+            }
             ActionButton(st.playAgain, Palette.RaiseBtn, modifier = Modifier.fillMaxWidth()) { vm.playAgain() }
+            ExportDialog(vm)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ActionButton(st.history, Palette.PanelHi, modifier = Modifier.weight(1f)) { vm.screen = Screen.History }
                 ActionButton(st.home, Palette.PanelHi, modifier = Modifier.weight(1f)) { vm.screen = Screen.Home }
@@ -534,8 +568,12 @@ fun HistoryScreen(vm: AppViewModel) {
             Spacer(Modifier.weight(1f))
             Pill(st.all, !favOnly, { favOnly = false })
             Pill("★ " + st.favorites, favOnly, { favOnly = true })
+            SmallButton(st.exportAll, { vm.exportHistory(false) })
+            SmallButton(st.exportStarred, { vm.exportHistory(true) })
         }
         Text(st.keepHandsNote, color = Palette.TextDim, fontSize = 11.sp, modifier = Modifier.padding(vertical = 6.dp))
+        Text(st.exportLimit, color = Palette.TextDim, fontSize = 11.sp, modifier = Modifier.padding(bottom = 6.dp))
+        ExportDialog(vm)
         if (loaded && shown.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(st.noHandsHint, color = Palette.TextDim, fontSize = 14.sp, modifier = Modifier.width(360.dp))

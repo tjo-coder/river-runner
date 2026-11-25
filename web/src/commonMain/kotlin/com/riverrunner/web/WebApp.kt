@@ -37,6 +37,8 @@ import kotlin.random.Random
 
 // Browser pieces, implemented separately for the JS and the Wasm build (see Browser.*.kt).
 internal expect fun storageGet(key: String): String?
+internal expect fun deliverExportFile(filename: String, text: String): String
+internal expect fun copyExportText(text: String): Boolean
 /** False when the browser refused (storage full or blocked). */
 internal expect fun storageSet(key: String, value: String): Boolean
 internal expect fun storageRemove(key: String)
@@ -102,6 +104,8 @@ internal object WebPlatform : Platform {
     override val appVersion: String = BuildInfo.VERSION
     override val systemChinese: Boolean get() = browserLanguage().lowercase().startsWith("zh")
     override fun changelogText(): String = BuildInfo.CHANGELOG
+    override fun deliverExport(filename: String, text: String): String = deliverExportFile(filename, text)
+    override fun copyExport(text: String): Boolean = copyExportText(text)
 }
 
 /** Settings as strings in localStorage ("rr.set.<key>"). */

@@ -128,11 +128,45 @@ class GameSession(val config: SessionConfig) {
         if (engine.players.none { it.seat == seat }) return PressureContext.OFF
         val round = squidRound
         val unsafe = round != null && player.alive && !round.isSafe(seat)
+        val urgency = if (!unsafe || round == null) 0.0 else {
+            val chips = Squid.penaltyChips(player.startStack, BASE_BB, round.rules)
+            // Time-in-round times how large the frozen starting-stack penalty is.
+            // Safe players stay at 0. This is not a GTO adjustment.
+            Squid.combinedUrgency(round.urgency(), chips, player.startStack)
+        }
         return PressureContext.on(
             sessionStart = player.startStack,
             squidUnsafe = unsafe,
-            squidUrgency = if (unsafe) round!!.urgency() else 0.0,
+            squidUrgency = urgency,
         )
+    }
+
+    /**
+     * Ledger line for the hand that just finished. [before] is the status from
+     * before [completeHand]. Null when squid is off.
+     */
+    fun squidHandNote(before: SquidStatus?, settlement: SquidSettlement?): SquidHandNote? {
+        val rules = config.squid ?: return null
+        val start = hero.startStack
+        return SquidHandNote(
+            handsPerRound = rules.handsPerRound,
+            penaltyPercent = rules.penaltyPercent,
+            legacyPenaltyBb = if (rules.penaltyPercent == null) rules.penaltyBb else null,
+            penaltyChips = Squid.penaltyChips(start, BASE_BB, rules),
+            sessionStartStack = start,
+            sessionStartBlind = BASE_BB,
+            handInRound = before?.handInRound ?: 1,
+            handsLeftBefore = before?.handsLeft ?: rules.handsPerRound,
+            safeBefore = before?.safeSeats?.sorted() ?: emptyList(),
+            settlementDeltas = settlement?.delta,
+        )
+    }
+
+    /** Penalty in chips for [seat], using the stack they started the session with. */
+    fun squidPenaltyChips(seat: Int): Int {
+        val rules = config.squid ?: return 0
+        val player = players.getOrNull(seat) ?: return 0
+        return Squid.penaltyChips(player.startStack, BASE_BB, rules)
     }
 
     fun startHand(): HandEngine {
@@ -175,8 +209,11 @@ class GameSession(val config: SessionConfig) {
             val winners = Squid.potWinners(result)
             val closed = round.completeHand(winners)
             if (closed != null) {
-                val aliveStacks = players.filter { it.alive }.associate { it.seat to it.stack }
-                val settlement = Squid.settle(aliveStacks, closed, engine.bigBlind, round.rules.penaltyBb)
+                val alivePlayersNow = players.filter { it.alive }
+                val aliveStacks = alivePlayersNow.associate { it.seat to it.stack }
+                // Opening blind and opening stack. Not engine.bigBlind: a later level must not inflate the charge.
+                val amounts = alivePlayersNow.associate { it.seat to Squid.penaltyChips(it.startStack, BASE_BB, round.rules) }
+                val settlement = Squid.settleAmounts(aliveStacks, closed, amounts)
                 lastSquidSettlement = settlement
                 if (settlement != null) {
                     for ((seat, delta) in settlement.delta) {
