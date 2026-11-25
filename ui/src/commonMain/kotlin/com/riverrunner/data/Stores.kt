@@ -89,6 +89,24 @@ class Prefs(private val sp: Settings, private val systemChinese: Boolean) {
         get() = sp.getString("mix", "").takeIf { it.startsWith("M:") }?.let { StyleMix.decode(it.removePrefix("M:")) }
         set(v) = sp.putString("mix", if (v == null) "" else "M:" + v.encode())
 
+    /**
+     * Squid side game for the next session. Missing keys (older saves) stay off,
+     * so existing localStorage / SharedPreferences are left as they are.
+     */
+    var squidEnabled: Boolean
+        get() = sp.getBoolean("squid", false)
+        set(v) = sp.putBoolean("squid", v)
+
+    /** 0 = one full orbit (one hand per seat). */
+    var squidHands: Int
+        get() = sp.getInt("squidHands", 0).coerceAtLeast(0)
+        set(v) = sp.putInt("squidHands", v)
+
+    /** Big blinds each unsafe player pays when the round ends. */
+    var squidPenaltyBb: Int
+        get() = sp.getInt("squidPen", 1).coerceIn(1, 20)
+        set(v) = sp.putInt("squidPen", v)
+
     /** Table HUD: each bot's VPIP / PFR / AF for this session. */
     var showHud: Boolean
         get() = sp.getBoolean("hud", false)

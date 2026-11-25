@@ -475,14 +475,33 @@ private fun SeatPod(s: SeatUi, g: TableGeometry, t: TableUi, fmt: (Int) -> Strin
         Box(Modifier.align(Alignment.TopCenter)) {
             ActionBadge(s.handName ?: s.action, s.actKind, gold = s.handName != null && s.won > 0)
         }
-        // position (+ style in replay) (bottom-left)
+        // position (+ style in replay) and squid pip (bottom-left)
         val posText = listOfNotNull(s.position.takeIf { it.isNotEmpty() }, s.tag).joinToString(" · ")
-        if (posText.isNotEmpty()) {
-            Text(
-                posText, color = Palette.TextDim, fontSize = 11.sp, lineHeight = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1,
-                modifier = Modifier.align(Alignment.BottomStart).offset(x = if (s.hud != null) 6.dp else 12.dp, y = (-2).dp)
-                    .clip(RoundedCornerShape(4.dp)).background(Color(0xCC0B1210)).padding(horizontal = 4.dp),
-            )
+        if (posText.isNotEmpty() || s.squidSafe != null) {
+            Row(
+                Modifier.align(Alignment.BottomStart).offset(x = if (s.hud != null) 4.dp else 8.dp, y = (-2).dp)
+                    .clip(RoundedCornerShape(4.dp)).background(Color(0xCC0B1210)).padding(horizontal = 4.dp, vertical = 1.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (s.squidSafe != null) {
+                    Box(
+                        Modifier.padding(end = 3.dp).size(8.dp).clip(CircleShape)
+                            .background(if (s.squidSafe == true) Palette.Green else Palette.Red),
+                    )
+                    if (!g.crowded && s.squidLabel != null) {
+                        Text(
+                            s.squidLabel, color = if (s.squidSafe == true) Palette.Green else Palette.Red,
+                            fontSize = 10.sp, lineHeight = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1,
+                        )
+                        if (posText.isNotEmpty()) Spacer(Modifier.width(3.dp))
+                    }
+                }
+                if (posText.isNotEmpty()) {
+                    Text(
+                        posText, color = Palette.TextDim, fontSize = 11.sp, lineHeight = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1,
+                    )
+                }
+            }
         }
         // equity (replay) or winnings (bottom-right); otherwise the HUD line when it is on
         Box(Modifier.align(Alignment.BottomEnd).offset(x = if (s.hud != null && s.won == 0) (-2).dp else (-8).dp, y = 0.dp)) {
@@ -551,6 +570,20 @@ private fun HeroSeat(s: SeatUi, g: TableGeometry, t: TableUi, fmt: (Int) -> Stri
                         if (s.position.isNotEmpty()) {
                             Spacer(Modifier.width(5.dp))
                             Text(s.position, color = Palette.TextDim, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                        }
+                        if (s.squidSafe != null) {
+                            Spacer(Modifier.width(5.dp))
+                            Box(
+                                Modifier.size(8.dp).clip(CircleShape)
+                                    .background(if (s.squidSafe == true) Palette.Green else Palette.Red),
+                            )
+                            if (s.squidLabel != null) {
+                                Spacer(Modifier.width(3.dp))
+                                Text(
+                                    s.squidLabel, color = if (s.squidSafe == true) Palette.Green else Palette.Red,
+                                    fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1,
+                                )
+                            }
                         }
                     }
                     Text(

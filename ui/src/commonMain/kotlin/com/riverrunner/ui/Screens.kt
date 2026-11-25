@@ -55,6 +55,7 @@ import com.riverrunner.engine.GameMode
 import com.riverrunner.engine.HandRecord
 import com.riverrunner.engine.HeroStats
 import com.riverrunner.engine.SessionConfig
+import com.riverrunner.engine.SquidRules
 import com.riverrunner.engine.Stats
 import com.riverrunner.engine.Progress
 import com.riverrunner.engine.Achievements
@@ -128,7 +129,9 @@ fun HomeScreen(vm: AppViewModel) {
                 ) {
                     Text(st.quickStart + "  ▶", color = Palette.Gold, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                     Text(
-                        summary.take(2).joinToString(if (st.isZh) "，" else ", "), color = Palette.Text.copy(alpha = 0.85f),
+                        summary.take(2).joinToString(if (st.isZh) "，" else ", ") +
+                            if (p.squidEnabled) (if (st.isZh) " · 鱿鱼" else " · Squid") else "",
+                        color = Palette.Text.copy(alpha = 0.85f),
                         fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
                 }
@@ -141,6 +144,9 @@ private fun lastConfig(p: Prefs) = SessionConfig(
     mode = p.lastMode, tableSize = p.lastSize, startingBB = p.lastStackBB, tableType = p.lastTableType,
     handsPerLevel = p.lastHandsPerLevel, cashAnteFraction = if (p.lastAnte) 0.125 else 0.0,
     styleMix = p.lastStyleMix,
+    squid = if (p.squidEnabled) {
+        SquidRules(if (p.squidHands > 0) p.squidHands else p.lastSize, p.squidPenaltyBb.toDouble())
+    } else null,
 )
 
 @Composable
@@ -165,6 +171,11 @@ fun SetupScreen(vm: AppViewModel) {
             p.lastMode = c.mode; p.lastSize = c.tableSize; p.lastStackBB = c.startingBB
             p.lastTableType = c.tableType; p.lastHandsPerLevel = c.handsPerLevel; p.lastAnte = c.cashAnteFraction > 0
             if (c.tableType == TableType.MIXED) p.lastStyleMix = c.styleMix
+            p.squidEnabled = c.squid != null
+            c.squid?.let {
+                p.squidPenaltyBb = it.penaltyBb.toInt().coerceIn(1, 20)
+                p.squidHands = if (it.handsPerRound == c.tableSize) 0 else it.handsPerRound
+            }
             vm.startGame(c)
         },
     )
@@ -180,6 +191,11 @@ fun SetupContent(initial: SessionConfig, onBack: () -> Unit, onStart: (SessionCo
     var table by remember { mutableStateOf(initial.tableType) }
     var hpl by remember { mutableIntStateOf(initial.handsPerLevel) }
     var ante by remember { mutableStateOf(initial.cashAnteFraction > 0) }
+    var squid by remember { mutableStateOf(initial.squid != null) }
+    var squidHands by remember {
+        mutableIntStateOf(initial.squid?.let { if (it.handsPerRound == initial.tableSize) 0 else it.handsPerRound } ?: 0)
+    }
+    var squidPen by remember { mutableIntStateOf(initial.squid?.penaltyBb?.toInt() ?: 1) }
     // mixed-table line-up: a preset, or null for the custom counts in `custom`
     val initMix = initial.styleMix
     var preset by remember {
@@ -258,6 +274,20 @@ fun SetupContent(initial: SessionConfig, onBack: () -> Unit, onStart: (SessionCo
                         Pill("12.5%", ante, { ante = true })
                     }
                 }
+                OptionRow(st.squidMode) {
+                    Pill(st.squidOff, !squid, { squid = false })
+                    Pill(st.squidOn, squid, { squid = true })
+                }
+                if (squid) {
+                    Text(st.squidHint, color = Palette.TextDim, fontSize = 12.sp, lineHeight = 17.sp)
+                    OptionRow(st.squidHands) {
+                        Pill(st.squidOrbit, squidHands == 0, { squidHands = 0 })
+                        for (h in listOf(4, 6, 8, 10)) Pill("$h", squidHands == h, { squidHands = h })
+                    }
+                    OptionRow(st.squidPenalty) {
+                        for (pen in listOf(1, 2, 5)) Pill("$pen BB", squidPen == pen, { squidPen = pen })
+                    }
+                }
             }
         }
         // what you are about to play, in words, next to the start button
@@ -278,6 +308,9 @@ fun SetupContent(initial: SessionConfig, onBack: () -> Unit, onStart: (SessionCo
                 } ?: st.lineupRandomDesc
                 Text("${st.lineup}: $lineupText", color = Palette.Text.copy(alpha = 0.85f), fontSize = 13.sp, lineHeight = 19.sp)
             }
+            if (squid) {
+                Text(st.squidSummary(squidHands, squidPen), color = Palette.Gold, fontSize = 13.sp, lineHeight = 19.sp)
+            }
             Spacer(Modifier.weight(1f))
             ActionButton(st.start, Palette.Gold, textColor = Palette.Ink, modifier = Modifier.fillMaxWidth().height(52.dp)) {
                 onStart(
@@ -285,6 +318,7 @@ fun SetupContent(initial: SessionConfig, onBack: () -> Unit, onStart: (SessionCo
                         mode = mode, tableSize = size, startingBB = stackBB, tableType = table,
                         handsPerLevel = hpl, cashAnteFraction = if (ante) 0.125 else 0.0,
                         styleMix = if (table == TableType.MIXED) chosenMix else null,
+                        squid = if (squid) SquidRules(if (squidHands == 0) size else squidHands, squidPen.toDouble()) else null,
                     )
                 )
             }
@@ -670,6 +704,9 @@ fun SettingsScreen(vm: AppViewModel) {
                 ToggleRow(st.practiceDefault, practice) { practice = it; vm.prefs.practiceDefault = it }
                 ToggleRow(st.showInBB, vm.showInBB) { vm.setShowBB(it) }
                 ToggleRow(st.sound, vm.soundOn) { vm.setSound(it) }
+                var squid by remember { mutableStateOf(vm.prefs.squidEnabled) }
+                ToggleRow(st.squidMode, squid) { squid = it; vm.prefs.squidEnabled = it }
+                Text(st.squidHint, color = Palette.TextDim, fontSize = 12.sp, lineHeight = 17.sp)
                 ActionButton(st.clearHistory, Palette.FoldBtn, modifier = Modifier.fillMaxWidth()) { confirmClear = true }
             }
             Column(

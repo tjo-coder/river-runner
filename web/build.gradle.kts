@@ -58,12 +58,24 @@ val generateBuildInfo = tasks.register<GenerateBuildInfo>("generateBuildInfo") {
 
 kotlin {
     js {
-        browser { commonWebpackConfig { outputFileName = "riverRunner.js" } }
+        browser {
+            commonWebpackConfig {
+                outputFileName = "riverRunner.js"
+                // Kotlin 2.2 does not set output.publicPath. Webpack 5 then defaults to
+                // "auto", which loads chunks relative to the script URL. That is what
+                // GitHub project pages need (https://<owner>.github.io/<repo>/). Do not
+                // set publicPath to "/" — assets would be requested from the domain root.
+            }
+        }
         binaries.executable()
     }
     @OptIn(ExperimentalWasmDsl::class)
     wasmJs {
-        browser { commonWebpackConfig { outputFileName = "riverRunner.js" } }
+        browser {
+            commonWebpackConfig {
+                outputFileName = "riverRunner.js"
+            }
+        }
         binaries.executable()
     }
 
