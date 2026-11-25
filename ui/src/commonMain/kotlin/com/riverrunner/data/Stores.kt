@@ -102,10 +102,29 @@ class Prefs(private val sp: Settings, private val systemChinese: Boolean) {
         get() = sp.getInt("squidHands", 0).coerceAtLeast(0)
         set(v) = sp.putInt("squidHands", v)
 
-    /** Big blinds each unsafe player pays when the round ends. */
+    /**
+     * Older saves stored 1, 2 or 5 here as big blinds. The getter still returns that
+     * number. It is not a percent. [squidPercent] is the new key; 0 means it was never set.
+     */
     var squidPenaltyBb: Int
         get() = sp.getInt("squidPen", 1).coerceIn(1, 20)
         set(v) = sp.putInt("squidPen", v)
+
+    /** 2, 5 or 10. 0 means this save has not chosen a percent. */
+    var squidPercent: Int
+        get() = sp.getInt("squidPct", 0)
+        set(v) = sp.putInt("squidPct", v)
+
+    fun hasLegacySquidPenalty(): Boolean = sp.contains("squidPen")
+
+    fun squidRules(tableSize: Int): com.riverrunner.engine.SquidRules? =
+        com.riverrunner.engine.SquidRules.fromSaved(
+            squidEnabled,
+            if (squidHands > 0) squidHands else tableSize,
+            squidPercent,
+            hasLegacySquidPenalty(),
+            squidPenaltyBb,
+        )
 
     /** Table HUD: each bot's VPIP / PFR / AF for this session. */
     var showHud: Boolean

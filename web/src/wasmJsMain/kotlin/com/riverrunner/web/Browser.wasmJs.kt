@@ -13,4 +13,15 @@ internal actual fun storageGet(key: String): String? = jsStorageGet(key)
 internal actual fun storageSet(key: String, value: String): Boolean = jsStorageSet(key, value)
 internal actual fun storageRemove(key: String) = jsStorageRemove(key)
 internal actual fun browserLanguage(): String = jsLanguage()
+private fun jsDeliver(name: String, text: String): String = js(
+    "(function(){ try { var blob = new Blob([text], {type:'application/json'}); var url = URL.createObjectURL(blob); var a = document.createElement('a'); a.href = url; a.download = name; a.rel = 'noopener'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function(){ URL.revokeObjectURL(url); }, 2000); return 'download'; } catch (e) {} try { if (navigator.share) { var file = new File([text], name, {type:'application/json'}); if (!navigator.canShare || navigator.canShare({files:[file]})) { navigator.share({files:[file], title:name}); return 'share'; } } } catch (e2) {} try { if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(text); return 'copy'; } } catch (e3) {} return 'fail'; })()"
+)
+
+private fun jsCopy(text: String): Boolean = js(
+    "(function(){ try { if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(text); return true; } } catch (e) {} return false; })()"
+)
+
+internal actual fun deliverExportFile(filename: String, text: String): String = jsDeliver(filename, text)
+internal actual fun copyExportText(text: String): Boolean = jsCopy(text)
+
 internal actual fun playAudio(url: String, volume: Double, rate: Double) = jsPlay(url, volume, rate)

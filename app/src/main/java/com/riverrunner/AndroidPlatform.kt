@@ -1,5 +1,7 @@
 package com.riverrunner
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.compose.ui.text.font.Font
@@ -24,6 +26,22 @@ class AndroidPlatform(context: Context) : Platform {
     /** CHANGELOG.md, packed into the APK as assets/changelog.md (see app/build.gradle.kts). */
     override fun changelogText(): String =
         runCatching { app.assets.open("changelog.md").bufferedReader().use { it.readText() } }.getOrDefault("")
+
+    override fun deliverExport(filename: String, text: String): String {
+        val safe = filename.replace(Regex("[^A-Za-z0-9._-]"), "_")
+        return runCatching {
+            val dir = File(app.filesDir, "exports")
+            dir.mkdirs()
+            File(dir, safe).writeText(text)
+            "saved"
+        }.getOrDefault("fail")
+    }
+
+    override fun copyExport(text: String): Boolean = runCatching {
+        val cm = app.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        cm.setPrimaryClip(ClipData.newPlainText("river-runner", text))
+        true
+    }.getOrDefault(false)
 }
 
 /** Condensed numerals (Barlow Condensed, SIL OFL) from the app's font resources. */

@@ -394,7 +394,9 @@ class PressureTest {
         val e = live.startHand()
         val ctx = live.pressureFor(e, 3)
         assertTrue(ctx.enabled && ctx.squidUnsafe)
-        assertEquals(0.25, ctx.squidUrgency, 1e-9)
+        // Legacy 1 starting big blind is 1% of a 100BB stack, so the weight is 0.2 and the
+        // first-hand clock (0.25) becomes 0.05. It is not the old clock alone.
+        assertEquals(0.05, ctx.squidUrgency, 1e-9)
         assertEquals(6, live.squidStatus()!!.handsLeft)
         assertEquals(6, live.squidStatus()!!.unsafeCount)
     }

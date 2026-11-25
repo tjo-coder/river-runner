@@ -236,8 +236,23 @@ data class Strings(
      * true = hero paid, false = hero was safe, null = hero was not in the round.
      */
     val squidSettled: (Boolean?) -> String,
-    /** round length in hands (0 = one orbit), penalty in big blinds */
+    /** round length in hands (0 = one orbit), penalty percent */
     val squidSummary: (Int, Int) -> String,
+    val squidLegacyNote: String,
+    /** chip amount, starting big blinds as already formatted text */
+    val squidAmount: (Int, String) -> String,
+    val squidPercentOf: String,
+    val exportAll: String,
+    val exportStarred: String,
+    val exportSession: String,
+    val exportCopy: String,
+    val exportClose: String,
+    val exportDownloaded: String,
+    val exportShared: String,
+    val exportCopied: String,
+    val exportSaved: String,
+    val exportFailed: String,
+    val exportLimit: String,
     val deckStyle: String,
     val deckFour: String,
     val deckFilled: String,
@@ -486,7 +501,7 @@ val ZH = Strings(
     quickStart = "按上次设置开始",
     stackLabelBB = "起始筹码 (BB)",
     squidMode = "鱿鱼局",
-    squidHint = "每一轮里还没赢过牌的人是「未安全」。轮次结束时，他们向已经赢过牌的人支付罚金。越接近结束，未安全的对手打得越宽、越凶。",
+    squidHint = "每一轮里还没赢过牌的人是「未安全」。轮次结束时，他们按开局筹码的比例，向已经赢过牌的人支付罚金。罚金在开局时定死，涨盲也不会变多。罚金越大，未安全的对手越接近结束打得越宽、越凶。",
     squidOn = "开启",
     squidOff = "关闭",
     squidHands = "一轮手数",
@@ -505,10 +520,24 @@ val ZH = Strings(
             null -> "鱿鱼本轮已结算"
         }
     },
-    squidSummary = { hands, pen ->
-        if (hands <= 0) "鱿鱼局：一整圈为一轮，未安全的人各付 $pen BB"
-        else "鱿鱼局：每 $hands 手一轮，未安全的人各付 $pen BB"
+    squidSummary = { hands, pct ->
+        val round = if (hands <= 0) "一整圈为一轮" else "每 $hands 手一轮"
+        "鱿鱼局：$round，未安全的人支付开局筹码的 $pct%"
     },
+    squidLegacyNote = "这份档案还留着以前的固定大盲罚金（按开局时的大盲计算，不会跟着涨盲变大）。点一个百分比之后，才改成按开局筹码的比例。",
+    squidAmount = { chips, bb -> "$chips 筹码（开局 $bb BB，整局不变）" },
+    squidPercentOf = "占开局筹码",
+    exportAll = "导出全部",
+    exportStarred = "导出收藏",
+    exportSession = "导出本局",
+    exportCopy = "复制全文",
+    exportClose = "关闭",
+    exportDownloaded = "已交给浏览器下载。如果没有出现文件，用「复制全文」。",
+    exportShared = "已打开系统分享。也可以复制全文。",
+    exportCopied = "已复制到剪贴板。",
+    exportSaved = "已写在本机的导出文件里。也可以复制全文。",
+    exportFailed = "没能导出。请再试一次。",
+    exportLimit = "没收藏的牌只留最近 1000 手，收藏的会一直留着。更早删掉的牌这里导不出来。文件只在你的设备上，不会上传。",
     deckStyle = "牌面配色",
     deckFour = "四色",
     deckFilled = "四色底",
@@ -754,7 +783,7 @@ val EN = Strings(
     quickStart = "Practice last setup",
     stackLabelBB = "Stack (BB)",
     squidMode = "Squid mode",
-    squidHint = "Anyone who has not won a hand this round is at risk. When the round ends they pay the players who have won one. At-risk opponents widen up as the round runs out.",
+    squidHint = "Anyone who has not won a hand this round is at risk. At the end they pay a percent of the stack they started the session with. That chip amount stays fixed when blinds rise. A larger penalty makes at-risk opponents widen up more as the round runs out.",
     squidOn = "On",
     squidOff = "Off",
     squidHands = "Round length",
@@ -773,10 +802,24 @@ val EN = Strings(
             null -> "Squid round settled"
         }
     },
-    squidSummary = { hands, pen ->
-        if (hands <= 0) "Squid: one orbit per round, each at-risk player pays $pen BB"
-        else "Squid: every $hands hands, each at-risk player pays $pen BB"
+    squidSummary = { hands, pct ->
+        val round = if (hands <= 0) "one orbit per round" else "every $hands hands"
+        "Squid: $round, at-risk players pay $pct% of their starting stack"
     },
+    squidLegacyNote = "This save still has the older fixed-blind penalty (that many big blinds from the start of the session, so rising blinds do not increase it). Choose a percent to switch.",
+    squidAmount = { chips, bb -> "$chips chips ($bb BB at the start, fixed for the session)" },
+    squidPercentOf = "Of starting stack",
+    exportAll = "Export all",
+    exportStarred = "Export starred",
+    exportSession = "Export session",
+    exportCopy = "Copy all",
+    exportClose = "Close",
+    exportDownloaded = "The browser was asked to download the file. If nothing appeared, use Copy all.",
+    exportShared = "The share sheet is open. You can also copy the text.",
+    exportCopied = "Copied to the clipboard.",
+    exportSaved = "Saved on this device. You can also copy the text.",
+    exportFailed = "Export failed. Please try again.",
+    exportLimit = "Hands you have not starred are kept for the latest 1000 only. Starred hands stay. Hands already dropped cannot be exported. The file stays on your device and is not uploaded.",
     deckStyle = "Card colours",
     deckFour = "4-colour",
     deckFilled = "Coloured cards",

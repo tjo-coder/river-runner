@@ -223,7 +223,7 @@ private fun SidePanel(
             if (ui.squidText != null) {
                 Text(
                     ui.squidText, color = if (ui.squidHeroUnsafe) Palette.Red else Palette.Green,
-                    fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.Bold, maxLines = 2,
+                    fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.Bold, maxLines = 4,
                 )
             }
         }

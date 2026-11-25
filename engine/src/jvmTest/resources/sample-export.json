@@ -1,0 +1,227 @@
+{
+  "format": "river-runner.export",
+  "formatVersion": 1,
+  "exportedAtEpochMs": 1700000000100,
+  "appVersion": "0.8.0",
+  "scope": "all",
+  "profile": {
+    "id": "p1",
+    "name": "Ace"
+  },
+  "retention": {
+    "nonStarredHandsKept": 1000,
+    "starredHandsKept": true,
+    "note": "Unstarred hands beyond the newest 1000 are dropped and cannot be exported. Starred hands are kept. This file is not uploaded."
+  },
+  "summary": "heroNetChipsFromHands is the sum of per-hand results. Each result uses chips won (including uncalled chips returned to the bettor) minus chips that seat committed. It does not include squid payments. The in-app BB/100 uses the same hand results. The end-of-session profit number on the result screen does include squid when a session was played with squid on. squidNetChipsForHero sums only settlements that were recorded; it is null when every hand in this file predates the squid ledger.",
+  "totals": {
+    "hands": 1,
+    "starredHands": 1,
+    "heroNetChipsFromHands": -600,
+    "squidHandsWithLedger": 0,
+    "squidHandsWithoutLedger": 1,
+    "squidNetChipsForHero": null,
+    "heroNetChipsHandsPlusRecordedSquid": null,
+    "bbPer100IncludesSquid": false
+  },
+  "session": null,
+  "hands": [
+    {
+      "id": 42,
+      "timeEpochMs": 1700000000000,
+      "orderInSession": 1,
+      "starred": true,
+      "mode": "CASH",
+      "tableSize": 3,
+      "buttonSeat": 0,
+      "heroSeat": 0,
+      "blinds": {
+        "smallBlind": 50,
+        "bigBlind": 100,
+        "ante": 0
+      },
+      "players": [
+        {
+          "seat": 1,
+          "name": "Ace",
+          "style": "LAG",
+          "position": "SB",
+          "stackAtHandStart": 300,
+          "hole": [
+            "As",
+            "Ah"
+          ],
+          "holeVisibility": "shown-at-showdown"
+        },
+        {
+          "seat": 2,
+          "name": "Blaze",
+          "style": "NIT",
+          "position": "BB",
+          "stackAtHandStart": 600,
+          "hole": [
+            "Ks",
+            "Kh"
+          ],
+          "holeVisibility": "shown-at-showdown"
+        },
+        {
+          "seat": 0,
+          "name": "You",
+          "style": "GTO",
+          "position": "BTN",
+          "stackAtHandStart": 1000,
+          "hole": [
+            "7c",
+            "2d"
+          ],
+          "holeVisibility": "known-to-hero"
+        }
+      ],
+      "boardByStreet": {
+        "flop": [
+          "Qd",
+          "Jd",
+          "9c"
+        ],
+        "turn": "4s",
+        "river": "3h",
+        "cardsDealt": 5
+      },
+      "actions": [
+        {
+          "order": 0,
+          "street": "preflop",
+          "seat": 1,
+          "type": "small_blind",
+          "isBlindOrAnte": true,
+          "amount": 50,
+          "streetTotal": 50,
+          "allIn": false,
+          "potBefore": null,
+          "toCallBefore": null,
+          "stackBehindBefore": null,
+          "streetBetBefore": null,
+          "boardBefore": [],
+          "decisionFacts": "forced-post"
+        },
+        {
+          "order": 1,
+          "street": "preflop",
+          "seat": 2,
+          "type": "big_blind",
+          "isBlindOrAnte": true,
+          "amount": 100,
+          "streetTotal": 100,
+          "allIn": false,
+          "potBefore": null,
+          "toCallBefore": null,
+          "stackBehindBefore": null,
+          "streetBetBefore": null,
+          "boardBefore": [],
+          "decisionFacts": "forced-post"
+        },
+        {
+          "order": 2,
+          "street": "preflop",
+          "seat": 0,
+          "type": "raise",
+          "isBlindOrAnte": false,
+          "amount": 1000,
+          "streetTotal": 1000,
+          "allIn": true,
+          "potBefore": 150,
+          "toCallBefore": 100,
+          "stackBehindBefore": 1000,
+          "streetBetBefore": 0,
+          "boardBefore": [],
+          "decisionFacts": "reconstructed"
+        },
+        {
+          "order": 3,
+          "street": "preflop",
+          "seat": 1,
+          "type": "call",
+          "isBlindOrAnte": false,
+          "amount": 250,
+          "streetTotal": 300,
+          "allIn": true,
+          "potBefore": 1150,
+          "toCallBefore": 250,
+          "stackBehindBefore": 250,
+          "streetBetBefore": 50,
+          "boardBefore": [],
+          "decisionFacts": "reconstructed"
+        },
+        {
+          "order": 4,
+          "street": "preflop",
+          "seat": 2,
+          "type": "call",
+          "isBlindOrAnte": false,
+          "amount": 500,
+          "streetTotal": 600,
+          "allIn": true,
+          "potBefore": 1400,
+          "toCallBefore": 500,
+          "stackBehindBefore": 500,
+          "streetBetBefore": 100,
+          "boardBefore": [],
+          "decisionFacts": "reconstructed"
+        }
+      ],
+      "result": {
+        "reconstruction": "from-recorded-actions",
+        "wonIncludingUncalledReturn": {
+          "0": 400,
+          "1": 900,
+          "2": 600
+        },
+        "uncalledReturned": {
+          "seat": 0,
+          "chips": 400,
+          "countsAsWinningAPot": false
+        },
+        "pots": [
+          {
+            "amount": 900,
+            "eligible": [
+              1,
+              2,
+              0
+            ],
+            "winners": [
+              1
+            ]
+          },
+          {
+            "amount": 600,
+            "eligible": [
+              2,
+              0
+            ],
+            "winners": [
+              2
+            ]
+          }
+        ],
+        "potWinners": [
+          1,
+          2
+        ],
+        "showdownSeats": [
+          1,
+          2,
+          0
+        ]
+      },
+      "heroNetChipsThisHand": -600,
+      "heroNetIncludesUncalledReturn": true,
+      "heroNetIncludesSquid": false,
+      "squid": {
+        "availability": "not-recorded",
+        "note": "This hand was saved before squid settlements were written down, or squid was off and no ledger line was stored."
+      }
+    }
+  ]
+}
