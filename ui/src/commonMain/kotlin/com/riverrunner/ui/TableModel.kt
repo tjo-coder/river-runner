@@ -46,6 +46,10 @@ data class SeatUi(
     val tag: String? = null,
     /** live HUD line for a bot, e.g. "入32 加18 · 24手" (null = HUD off) */
     val hud: String? = null,
+    /** null when squid mode is off; otherwise whether this player has won a hand in the round */
+    val squidSafe: Boolean? = null,
+    /** "安全" / "Safe" when [squidSafe] is set */
+    val squidLabel: String? = null,
 )
 
 /** GTO feedback on the hero's last decision. */
@@ -119,10 +123,22 @@ data class TableScreenUi(
     /** a finished hand of this session can be replayed */
     val canReplayLast: Boolean = false,
     val soundOn: Boolean = true,
+    /** Squid countdown and whether you are safe. Null when squid is off. */
+    val squidText: String? = null,
+    val squidHeroUnsafe: Boolean = false,
 )
 
 /** Static info about a seat that lives outside a single hand. */
-data class SeatInfo(val seat: Int, val name: String, val isHero: Boolean, val stack: Int, val busted: Boolean, val hud: String? = null)
+data class SeatInfo(
+    val seat: Int,
+    val name: String,
+    val isHero: Boolean,
+    val stack: Int,
+    val busted: Boolean,
+    val hud: String? = null,
+    /** null when squid is off or this player is already out */
+    val squidSafe: Boolean? = null,
+)
 
 object TableMapper {
 
@@ -211,6 +227,12 @@ object TableMapper {
                     won = if (stage == Stage.FINAL) won - returned else 0,
                     handName = if (score != null && p.seat in showdown) HandEvaluator.categoryName(score, st.isZh) else null,
                     hud = info.hud,
+                    squidSafe = info.squidSafe,
+                    squidLabel = when (info.squidSafe) {
+                        true -> st.squidSafe
+                        false -> st.squidUnsafe
+                        null -> null
+                    },
                 )
             }
         }

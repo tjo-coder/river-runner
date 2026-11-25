@@ -23,6 +23,11 @@ data class SessionConfig(
     val seed: Long = Random.nextLong(),
     /** mixed table line-up; null = every bot seat draws a random style (GTO included) */
     val styleMix: StyleMix? = null,
+    /**
+     * Squid side game. Null keeps the previous behaviour and is the default, so
+     * existing setups and saves are unchanged. New fields on [Prefs] only.
+     */
+    val squid: SquidRules? = null,
 )
 
 data class BlindLevel(val level: Int, val smallBlind: Int, val bigBlind: Int, val ante: Int)
@@ -60,6 +65,9 @@ class GameSession(val config: SessionConfig) {
     var buttonSeat: Int; private set
     var current: HandEngine? = null; private set
     private var finished: SessionSummary? = null
+    private val squidRound: SquidTracker? = config.squid?.let { SquidTracker(it) }
+    /** Set when the hand that just finished closed a squid round and chips moved. */
+    var lastSquidSettlement: SquidSettlement? = null; private set
 
     companion object {
         const val HERO_SEAT = 0
@@ -108,6 +116,25 @@ class GameSession(val config: SessionConfig) {
     fun tournamentContext(): TournamentContext? =
         if (config.mode == GameMode.TOURNAMENT) TournamentContext(alivePlayers.associate { it.seat to it.stack }, payouts) else null
 
+    /** Null when squid is off. Safe seats are players who have won a hand this round. */
+    fun squidStatus(): SquidStatus? = squidRound?.status(alivePlayers.map { it.seat }.toSet())
+
+    /**
+     * Stack and squid pressure for an NPC decision. The GTO hint does not use
+     * this: practice mode keeps showing the unpressured mix.
+     */
+    fun pressureFor(engine: HandEngine, seat: Int): PressureContext {
+        val player = players.getOrNull(seat) ?: return PressureContext.OFF
+        if (engine.players.none { it.seat == seat }) return PressureContext.OFF
+        val round = squidRound
+        val unsafe = round != null && player.alive && !round.isSafe(seat)
+        return PressureContext.on(
+            sessionStart = player.startStack,
+            squidUnsafe = unsafe,
+            squidUrgency = if (unsafe) round!!.urgency() else 0.0,
+        )
+    }
+
     fun startHand(): HandEngine {
         check(!isOver)
         val alive = alivePlayers
@@ -142,6 +169,28 @@ class GameSession(val config: SessionConfig) {
         handNumber++
         val record = HandRecord.from(engine, config.mode, handNumber, HERO_SEAT, config.tableSize,
             styles = players.associate { it.seat to it.style })
+        lastSquidSettlement = null
+        val round = squidRound
+        if (round != null) {
+            val winners = result.won.filterValues { it > 0 }.keys
+            val closed = round.completeHand(winners)
+            if (closed != null) {
+                val aliveStacks = players.filter { it.alive }.associate { it.seat to it.stack }
+                val settlement = Squid.settle(aliveStacks, closed, engine.bigBlind, round.rules.penaltyBb)
+                lastSquidSettlement = settlement
+                if (settlement != null) {
+                    for ((seat, delta) in settlement.delta) {
+                        players[seat].stack = (players[seat].stack + delta).coerceAtLeast(0)
+                    }
+                    val squidBusted = players.filter { it.place == 0 && it.stack == 0 }.sortedBy { it.startStack }
+                    var place = players.count { it.place == 0 }
+                    for (b in squidBusted) {
+                        b.place = place
+                        place--
+                    }
+                }
+            }
+        }
         current = null
         return record.copy(won = result.won)
     }

@@ -379,7 +379,7 @@ class RecordTest {
                 if (e.phase == Phase.STREET_DONE) { e.dealNextStreet(); continue }
                 val seat = e.toAct
                 val style = session.players[seat].style
-                e.apply(Bot.decide(e, seat, style, rnd, session.tournamentContext()).sample(rnd))
+                e.apply(Bot.decide(e, seat, style, rnd, session.tournamentContext(), session.pressureFor(e, seat)).sample(rnd))
             }
             val finalStacks = e.players.associate { it.seat to it.stack }
             val rec = session.completeHand(e)
@@ -406,7 +406,7 @@ class SessionTest {
             while (e.phase != Phase.HAND_DONE) {
                 if (e.phase == Phase.STREET_DONE) { e.dealNextStreet(); continue }
                 val seat = e.toAct
-                e.apply(Bot.decide(e, seat, s.players[seat].style, rnd, s.tournamentContext()).sample(rnd))
+                e.apply(Bot.decide(e, seat, s.players[seat].style, rnd, s.tournamentContext(), s.pressureFor(e, seat)).sample(rnd))
             }
             s.completeHand(e)
             assertEquals(total, s.players.sumOf { it.stack })

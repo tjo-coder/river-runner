@@ -218,6 +218,21 @@ data class Strings(
     val startGame: String,
     val quickStart: String,
     val stackLabelBB: String,
+    val squidMode: String,
+    val squidHint: String,
+    val squidOn: String,
+    val squidOff: String,
+    val squidHands: String,
+    val squidOrbit: String,
+    val squidPenalty: String,
+    val squidSafe: String,
+    val squidUnsafe: String,
+    /** hands left, round length, unsafe players, whether the hero is unsafe */
+    val squidBanner: (Int, Int, Int, Boolean) -> String,
+    /** payer names, penalty amount already formatted */
+    val squidPaid: (String, String) -> String,
+    /** round length in hands (0 = one orbit), penalty in big blinds */
+    val squidSummary: (Int, Int) -> String,
     val deckStyle: String,
     val deckFour: String,
     val deckFilled: String,
@@ -465,6 +480,23 @@ val ZH = Strings(
     startGame = "开始练习",
     quickStart = "按上次设置开始",
     stackLabelBB = "起始筹码 (BB)",
+    squidMode = "鱿鱼局",
+    squidHint = "每一轮里还没赢过牌的人是「未安全」。轮次结束时，他们向已经赢过牌的人支付罚金。越接近结束，未安全的对手打得越宽、越凶。",
+    squidOn = "开启",
+    squidOff = "关闭",
+    squidHands = "一轮手数",
+    squidOrbit = "一整圈",
+    squidPenalty = "罚金",
+    squidSafe = "安全",
+    squidUnsafe = "未安全",
+    squidBanner = { left, total, unsafe, heroUnsafe ->
+        "鱿鱼 剩${left}/${total}手 · ${unsafe}人未安全 · " + if (heroUnsafe) "你未安全" else "你已安全"
+    },
+    squidPaid = { names, amount -> "鱿鱼结算：$names 各付最多 $amount 给本轮赢过牌的玩家" },
+    squidSummary = { hands, pen ->
+        if (hands <= 0) "鱿鱼局：一整圈为一轮，未安全的人各付 $pen BB"
+        else "鱿鱼局：每 $hands 手一轮，未安全的人各付 $pen BB"
+    },
     deckStyle = "牌面配色",
     deckFour = "四色",
     deckFilled = "四色底",
@@ -709,6 +741,23 @@ val EN = Strings(
     startGame = "Start practice",
     quickStart = "Practice last setup",
     stackLabelBB = "Stack (BB)",
+    squidMode = "Squid mode",
+    squidHint = "Anyone who has not won a hand this round is at risk. When the round ends they pay the players who have won one. At-risk opponents widen up as the round runs out.",
+    squidOn = "On",
+    squidOff = "Off",
+    squidHands = "Round length",
+    squidOrbit = "One orbit",
+    squidPenalty = "Penalty",
+    squidSafe = "Safe",
+    squidUnsafe = "At risk",
+    squidBanner = { left, total, unsafe, heroUnsafe ->
+        "Squid $left/$total left · $unsafe at risk · " + if (heroUnsafe) "you are at risk" else "you are safe"
+    },
+    squidPaid = { names, amount -> "Squid: $names each pay up to $amount to players who won a hand" },
+    squidSummary = { hands, pen ->
+        if (hands <= 0) "Squid: one orbit per round, each at-risk player pays $pen BB"
+        else "Squid: every $hands hands, each at-risk player pays $pen BB"
+    },
     deckStyle = "Card colours",
     deckFour = "4-colour",
     deckFilled = "Coloured cards",

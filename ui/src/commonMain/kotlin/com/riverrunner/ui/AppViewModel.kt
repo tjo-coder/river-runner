@@ -199,7 +199,11 @@ class AppViewModel(val platform: Platform) : ViewModel() {
     var strings by mutableStateOf(if (prefs.chinese) ZH else EN); private set
     var showInBB by mutableStateOf(prefs.showInBB); private set
 
-    fun setChinese(zh: Boolean) { prefs.chinese = zh; strings = if (zh) ZH else EN }
+    fun setChinese(zh: Boolean) {
+        prefs.chinese = zh
+        strings = if (zh) ZH else EN
+        session?.let { syncSquid(it) }
+    }
     fun setShowBB(v: Boolean) { prefs.showInBB = v; showInBB = v }
     var deckStyle by mutableStateOf(DeckStyle.fromCode(prefs.deckStyle)); private set
     fun setDeck(d: DeckStyle) { prefs.deckStyle = d.code; deckStyle = d }
@@ -230,6 +234,10 @@ class AppViewModel(val platform: Platform) : ViewModel() {
     private var heroInHand by mutableStateOf(true)
     private var sessionOver by mutableStateOf(false)
     private var notice by mutableStateOf<String?>(null)
+    private var squidText by mutableStateOf<String?>(null)
+    private var squidHeroUnsafe by mutableStateOf(false)
+    /** null = squid off. Seats in the set have won a hand this round. */
+    private var squidSafeSeats: Set<Int>? = null
     private var lastBlinds: Pair<Int, Int>? = null
     private val log = mutableStateListOf<LogLine>()
     var practice by mutableStateOf(prefs.practiceDefault)
@@ -242,6 +250,7 @@ class AppViewModel(val platform: Platform) : ViewModel() {
             handOver = handOver, actingName = actingName, heroInHand = heroInHand,
             fastForward = fastForward, sessionOver = sessionOver,
             notice = notice, soundOn = soundOn,
+            squidText = squidText, squidHeroUnsafe = squidHeroUnsafe,
             starred = starHand, reviewEach = reviewEachHand,
             showHud = showHud, showDeviation = showDeviation, feedback = feedback,
             canReplayLast = lastSessionRecord != null,
@@ -289,6 +298,9 @@ class AppViewModel(val platform: Platform) : ViewModel() {
         practice = prefs.practiceDefault
         sessionOver = false
         notice = null
+        squidText = null
+        squidHeroUnsafe = false
+        squidSafeSeats = null
         lastBlinds = null
         table = null
         screen = Screen.Table
@@ -346,7 +358,38 @@ class AppViewModel(val platform: Platform) : ViewModel() {
                 strings.hudShort((st.vpip * 100).roundToInt(), (st.pfr * 100).roundToInt())
             }
         } else null
-        SeatInfo(it.seat, if (it.isHuman) strings.you else it.name, it.isHuman, it.stack, !it.alive && it.place > 0, hud)
+        val safe = squidSafeSeats
+        SeatInfo(
+            it.seat, if (it.isHuman) strings.you else it.name, it.isHuman, it.stack, !it.alive && it.place > 0, hud,
+            squidSafe = if (safe == null || !it.alive) null else it.seat in safe,
+        )
+    }
+
+    private fun syncSquid(s: GameSession) {
+        val st = s.squidStatus()
+        if (st == null) {
+            squidText = null
+            squidHeroUnsafe = false
+            squidSafeSeats = null
+        } else {
+            squidSafeSeats = st.safeSeats
+            squidHeroUnsafe = s.hero.alive && GameSession.HERO_SEAT !in st.safeSeats
+            squidText = strings.squidBanner(st.handsLeft, st.handsPerRound, st.unsafeCount, squidHeroUnsafe)
+        }
+    }
+
+    /** Penalty chips land on the shown stacks once the hand result is up. */
+    private fun applySquidStacks(s: GameSession) {
+        val delta = s.lastSquidSettlement?.delta ?: return
+        val t = table ?: return
+        table = t.copy(seats = t.seats.map { seat ->
+            val d = delta[seat.seat] ?: 0
+            if (d == 0) seat
+            else {
+                val stack = (seat.stack + d).coerceAtLeast(0)
+                seat.copy(stack = stack, busted = seat.busted || stack == 0)
+            }
+        })
     }
 
     /** Re-maps the seats (e.g. after the HUD is switched) without changing the hand. */
@@ -392,6 +435,7 @@ class AppViewModel(val platform: Platform) : ViewModel() {
     private suspend fun runGame(s: GameSession) {
         while (!s.isOver && !quitRequested) {
             val e = s.startHand()
+            syncSquid(s)
             handKey = kotlin.random.Random.nextLong()
             actionSeq = 0
             handNumber = s.handNumber + 1
@@ -462,6 +506,7 @@ class AppViewModel(val platform: Platform) : ViewModel() {
                             // GTO reference for this decision, worked out while you think. It has its own
                             // random source so the session's deck is not disturbed; the hand does not change
                             // until the policy is ready (it is awaited before the move is applied).
+                            // Unpressured GTO: the hint stays the solver mix. NPCs below get stack and squid pressure.
                             val ctx = s.tournamentContext()
                             val seed = handKey xor (actionSeq.toLong() shl 20)
                             val policyJob = viewModelScope.async(Dispatchers.Default) {
@@ -490,7 +535,7 @@ class AppViewModel(val platform: Platform) : ViewModel() {
                             val style = s.players[seat].style
                             val ctx = s.tournamentContext()
                             val move = withContext(Dispatchers.Default) {
-                                Bot.decide(e, seat, style, s.random, ctx).sample(s.random)
+                                Bot.decide(e, seat, style, s.random, ctx, s.pressureFor(e, seat)).sample(s.random)
                             }
                             pause(think - (nowMillis() - started))
                             apply(e, s, move)
@@ -532,6 +577,19 @@ class AppViewModel(val platform: Platform) : ViewModel() {
             if (showdown) sfx(Sound.FLIP, 0.8f)
             delay(if (wasFast) 300L else if (showdown) 1200L else 600L)
             table = TableMapper.build(strings, e, infosBefore, handKey, actionSeq, TableMapper.Stage.FINAL, { fmt(it, bb) })
+            applySquidStacks(s)
+            s.lastSquidSettlement?.let { settlement ->
+                if (settlement.unsafe.isNotEmpty()) {
+                    val names = settlement.unsafe.sorted().joinToString(if (strings.isZh) "、" else ", ") { seat ->
+                        if (seat == GameSession.HERO_SEAT) strings.you else s.players[seat].name
+                    }
+                    val text = strings.squidPaid(names, fmt(settlement.penaltyChips, bb))
+                    notice = text
+                    log += LogLine(LogKind.RESULT, text)
+                    val shown = notice
+                    viewModelScope.launch { delay(5000); if (notice == shown) notice = null }
+                }
+            }
             if ((e.result?.net?.get(GameSession.HERO_SEAT) ?: 0) > 0) sfx(Sound.WIN, 0.8f) else sfx(Sound.COLLECT, 0.7f)
             TableMapper.resultBanner(strings, e, infosBefore) { fmt(it, bb) }?.let { log += LogLine(LogKind.RESULT, it) }
             handOver = TableMapper.handOver(strings, e, infosBefore, GameSession.HERO_SEAT)

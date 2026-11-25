@@ -335,6 +335,7 @@ private val TERMS = listOf(
     Term("翻牌 / 转牌 / 河牌", "第 3、4、5 张公共牌出现的三个阶段（翻牌一次发三张）。", "Flop / Turn / River", "The 3-card, 4th and 5th community card stages."),
     Term("摊牌 Showdown", "最后一轮下注结束后亮牌比大小。", "Showdown", "Showing hands after the last betting round."),
     Term("ICM / 独立筹码模型", "锦标赛结构里把筹码换算成名次价值的模型。临近 ITM 名次时，输光的代价更大，需要更紧。", "ICM", "Converts tournament chips into prize value. Near the money, busting costs more, so play tighter.", "Independent Chip Model"),
+    Term("鱿鱼局", "可选的附加规则。每一轮（默认一整圈）里还没赢过一手的人是「未安全」，座位上的红点；赢过的是「安全」，绿点。轮次结束时，未安全的人向安全的人支付罚金（默认 1 个大盲）。越接近结束，未安全的对手打得越凶。", "Squid", "Optional side game. In each round (one orbit by default) a player who has not won a hand is at risk (red dot); a player who has won one is safe (green dot). At the end, at-risk players pay the safe ones (1 big blind by default). At-risk opponents play wider as the round runs out."),
     Term("泡沫 Bubble", "离进入 ITM 名次只差一个人出局的阶段。", "Bubble", "When one more elimination puts everyone left in the money."),
     Term("ITM / 进入前列", "锦标赛结构中进入靠前的计分名次。", "ITM", "Finishing in a paid place in a tournament.", "In The Money"),
     Term("推/弃 Push/Fold", "筹码很短（约 15BB 以下）时，只选择全下或弃牌的打法。", "Push/fold", "With a short stack (under ~15 BB) you either go all-in or fold."),

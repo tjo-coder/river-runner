@@ -319,12 +319,15 @@ object Bot {
         style: BotStyle,
         random: Random,
         tournament: TournamentContext? = null,
+        pressure: PressureContext = PressureContext.OFF,
     ): Policy {
         val la = engine.legalActions()
         require(la.seat == seat)
-        val p = if (engine.street == Street.PREFLOP) preflop(engine, seat, style, la, random, tournament)
-        else postflop(engine, seat, style, la, random, tournament)
-        return Policy(p.options, p.equity, p.potOdds, p.icmRequired, la.pot)
+        val tuned = Pressure.tune(style, engine, seat, pressure)
+        val p = if (engine.street == Street.PREFLOP) preflop(engine, seat, style, la, random, tournament, tuned)
+        else postflop(engine, seat, style, la, random, tournament, tuned)
+        val options = normalized(Pressure.dampFolds(p.options, tuned.foldDamp))
+        return Policy(options, p.equity, p.potOdds, p.icmRequired, la.pot)
     }
 
     /**
@@ -422,7 +425,7 @@ object Bot {
         return max(req, potOdds) to req
     }
 
-    private fun preflop(engine: HandEngine, seat: Int, style: BotStyle, la: LegalActions, random: Random, t: TournamentContext?): Policy {
+    private fun preflop(engine: HandEngine, seat: Int, style: BotStyle, la: LegalActions, random: Random, t: TournamentContext?, tuned: PressureTune): Policy {
         val me = engine.player(seat)
         val bb = engine.bigBlind
         val pct = HandClasses.percentile(me.hole[0], me.hole[1])
@@ -443,9 +446,9 @@ object Bot {
             val samplers = opps.map { samplerFor(engine, it.seat, ranges.getValue(it.seat)) }
             val eq = Equity.vsRanges(me.hole, emptyList(), samplers, 500, random)
             val (req, icm) = requiredEquity(engine, seat, la, t)
-            val margin = eq + style.callBias * 0.5 - req
+            val margin = eq + tuned.callBias * 0.5 - req
             val pCall = above(margin, 0.0, 0.02)
-            val canJam = la.canRaise && raises <= 3 && pct < 0.03 * style.aggression
+            val canJam = la.canRaise && raises <= 3 && pct < 0.03 * tuned.aggression
             if (canJam) opts += Move.raiseTo(la.maxRaiseTo) to pCall
             else opts += Move.CALL to pCall
             opts += Move.FOLD to (1 - pCall)
@@ -457,21 +460,25 @@ object Bot {
             val limpers = callers
             if (la.canCheck) {
                 // big blind option after limps / folds
-                val thr = 0.12 * style.looseness * style.aggression
+                val thr = 0.12 * tuned.looseness * tuned.aggression
                 val pR = smooth(pct, thr, 0.02)
                 val size = bb * (3 + limpers)
                 if (la.canRaise) opts += raiseMove(la, size) to pR
                 opts += Move.CHECK to (1 - pR)
                 return Policy(normalized(opts), null, 0.0, null)
             }
-            if (effBB <= 13 && t != null || effBB <= 10) {
-                val w = pushWidth(effBB, behind) * (if (hu) 1.07 else 1.0) * style.looseness
+            // Cash shoves from 10bb, tournaments from 13bb. Pressure extends that line
+            // (15bb, and a bit further for a shrinking or table-short stack).
+            val pushLine = max(if (t != null) 13.0 else 10.0, tuned.pushFoldBb)
+            if (effBB <= pushLine) {
+                var w = pushWidth(effBB, behind) * (if (hu) 1.07 else 1.0) * tuned.looseness * tuned.pushMult
+                if (tuned.pushFoldBb > 0.0) w = w.coerceIn(0.0, if (hu) 0.98 else 0.95)
                 val pJam = smooth(pct, w, 0.012)
                 opts += Move.raiseTo(la.maxRaiseTo) to pJam
                 opts += Move.FOLD to (1 - pJam)
                 return Policy(normalized(opts), null, 0.0, null)
             }
-            var thr = rfiWidth(behind, hu) * style.looseness
+            var thr = rfiWidth(behind, hu) * tuned.looseness
             if (limpers > 0) thr *= 0.65
             val pRaise = smooth(pct, thr, 0.02)
             val openBB = when {
@@ -495,6 +502,20 @@ object Bot {
             return Policy(normalized(opts), null, 0.0, null)
         }
 
+        // Very short and under pressure: a single raise is a reshove, not a small 3-bet.
+        // A shove already in front of us is handled above, where equity is computed.
+        if (effBB <= PressureConfig.VERY_SHORT_BB && tuned.pushFoldBb > 0.0 && raises == 1 &&
+            la.canRaise && la.toCall < me.stack * 0.4
+        ) {
+            val w = (pushWidth(effBB, max(behind, 1)) * 0.75 * tuned.looseness * tuned.pushMult)
+                .coerceIn(0.12, if (hu) 0.90 else 0.72)
+            val pJam = smooth(pct, w, 0.012)
+            opts += Move.raiseTo(la.maxRaiseTo) to pJam
+            opts += Move.FOLD to (1 - pJam)
+            val faced = if (la.toCall > 0) la.toCall.toDouble() / (la.pot + la.toCall) else 0.0
+            return Policy(normalized(opts), null, faced, null)
+        }
+
         val potOdds = la.toCall.toDouble() / (la.pot + la.toCall)
         val lastRaise = acts.last { it.type.isAggressive }
         val raiserWidth = ranges.getValue(lastRaise.seat).hi
@@ -506,21 +527,21 @@ object Bot {
 
         when (raises) {
             1 -> {
-                var threeBet = max(0.022, raiserWidth * 0.30) * style.aggression
+                var threeBet = max(0.022, raiserWidth * 0.30) * tuned.aggression
                 var callTop = when {
                     isBB -> min(0.75, raiserWidth * 1.9 + 0.08 - (potOdds - 0.25))
                     isSB -> raiserWidth * 0.45
                     hu -> min(0.75, raiserWidth * 0.8)
                     else -> raiserWidth * 0.85
-                } * style.preflopCall
+                } * tuned.preflopCall
                 if (isSB) threeBet *= 1.35
                 if (callersAfterRaise > 0) { callTop *= 0.8; threeBet *= 1.1 }
                 if (!ip && !isBB) callTop *= 0.85
                 callTop = callTop.coerceIn(threeBet, 0.85)
                 val pValue = smooth(pct, threeBet, 0.008)
                 var pBluff = 0.0
-                if (pct > callTop && pct < callTop + 0.09 && (isSuited(me.hole))) pBluff = 0.35 * style.bluff
-                if (isSuitedWheelAce(me.hole) && pct > threeBet) pBluff = max(pBluff, 0.4 * style.bluff)
+                if (pct > callTop && pct < callTop + 0.09 && (isSuited(me.hole))) pBluff = 0.35 * tuned.bluff
+                if (isSuitedWheelAce(me.hole) && pct > threeBet) pBluff = max(pBluff, 0.4 * tuned.bluff)
                 val p3 = (pValue + (1 - pValue) * pBluff).coerceAtMost(1.0)
                 val pCall = (smooth(pct, callTop, 0.02) * (1 - p3)).coerceAtLeast(0.0)
                 val mult = (if (ip) 3.0 else 3.8) + callersAfterRaise
@@ -533,14 +554,14 @@ object Bot {
                 val fourBet: Double
                 val callTop: Double
                 if (iWasRaiser) {
-                    fourBet = max(0.02, raiserWidth * 0.33) * style.aggression
-                    callTop = max(0.06, raiserWidth * (if (ip) 1.05 else 0.8)) * style.preflopCall
+                    fourBet = max(0.02, raiserWidth * 0.33) * tuned.aggression
+                    callTop = max(0.06, raiserWidth * (if (ip) 1.05 else 0.8)) * tuned.preflopCall
                 } else {
-                    fourBet = 0.02 * style.aggression
-                    callTop = 0.04 * style.preflopCall
+                    fourBet = 0.02 * tuned.aggression
+                    callTop = 0.04 * tuned.preflopCall
                 }
                 val pValue = smooth(pct, fourBet, 0.006)
-                val pBluff = if (iWasRaiser && isSuitedWheelAce(me.hole)) 0.3 * style.bluff else 0.0
+                val pBluff = if (iWasRaiser && isSuitedWheelAce(me.hole)) 0.3 * tuned.bluff else 0.0
                 val p4 = (pValue + (1 - pValue) * pBluff).coerceAtMost(1.0)
                 val pCall = (smooth(pct, callTop, 0.012) * (1 - p4))
                 val target = (lastRaise.streetTotal * (if (ip) 2.3 else 2.6)).toInt()
@@ -549,9 +570,9 @@ object Bot {
                 opts += Move.FOLD to (1 - p4 - pCall).coerceAtLeast(0.0)
             }
             else -> {
-                val jam = 0.022 * style.aggression
+                val jam = 0.022 * tuned.aggression
                 val pJam = smooth(pct, jam, 0.005)
-                val pCall = smooth(pct, 0.045 * style.preflopCall, 0.008) * (1 - pJam)
+                val pCall = smooth(pct, 0.045 * tuned.preflopCall, 0.008) * (1 - pJam)
                 if (la.canRaise) opts += Move.raiseTo(la.maxRaiseTo) to pJam else opts += Move.CALL to pJam
                 opts += Move.CALL to pCall
                 opts += Move.FOLD to (1 - pJam - pCall).coerceAtLeast(0.0)
@@ -560,7 +581,7 @@ object Bot {
         return Policy(normalized(opts), null, potOdds, null)
     }
 
-    private fun postflop(engine: HandEngine, seat: Int, style: BotStyle, la: LegalActions, random: Random, t: TournamentContext?): Policy {
+    private fun postflop(engine: HandEngine, seat: Int, style: BotStyle, la: LegalActions, random: Random, t: TournamentContext?, tuned: PressureTune): Policy {
         val me = engine.player(seat)
         val board = engine.board
         val street = engine.street
@@ -587,7 +608,7 @@ object Bot {
             // ---------------- we can check or bet
             if (!la.canRaise) return Policy(listOf(Move.CHECK to 1.0), eq, 0.0, null)
             val valueThr = when (street) { Street.FLOP -> 1.22; Street.TURN -> 1.3; else -> 1.4 }
-            var pBet = above(rel, valueThr, 0.06) * min(1.0, 0.85 * style.aggression + 0.1)
+            var pBet = above(rel, valueThr, 0.06) * min(1.0, 0.85 * tuned.aggression + 0.1)
             if (cls == 4 && street == Street.FLOP && wet < 0.3 && nOpp == 1) pBet *= 0.7 // some slow-playing
             val pValue = pBet
             if (rel < valueThr) {
@@ -600,7 +621,7 @@ object Bot {
                     else -> 0.06
                 }
                 val medium = if (cls == 2 || cls == 3) 0.6 else 1.0  // medium hands prefer pot control
-                pBet = max(pBet, bluff * style.bluff * multi * medium)
+                pBet = max(pBet, bluff * tuned.bluff * multi * medium)
             }
             pBet = pBet.coerceIn(0.0, 0.97)
             if (spr < 1.3 && rel > valueThr) {
@@ -626,12 +647,12 @@ object Bot {
         val potOdds = la.toCall.toDouble() / (pot + la.toCall)
         val realization = if (ip) 1.0 else 0.9
         val implied = if (cls == 1 && street != Street.RIVER && spr > 1.5) 0.05 else 0.0
-        val eqEff = eq * realization + implied + style.callBias
+        val eqEff = eq * realization + implied + tuned.callBias
         val raiseThr = when (street) { Street.FLOP -> 1.45; Street.TURN -> 1.52; else -> 1.6 }
         var pRaise = 0.0
         var pValueRaise = 0.0
         if (la.canRaise) {
-            pRaise = above(rel, raiseThr, 0.05) * min(1.0, 0.65 * style.aggression)
+            pRaise = above(rel, raiseThr, 0.05) * min(1.0, 0.65 * tuned.aggression)
             if (cls == 4 && street == Street.FLOP && wet < 0.3) pRaise *= 0.6
             pValueRaise = pRaise
             val bluffRaise = when {
@@ -639,7 +660,7 @@ object Bot {
                 cls == 1 && street == Street.TURN -> 0.06
                 cls == 0 && street == Street.RIVER -> 0.03
                 else -> 0.0
-            } * style.bluff * multi
+            } * tuned.bluff * multi
             if (rel < raiseThr) pRaise = max(pRaise, bluffRaise)
         }
         var pCall = above(eqEff - req, 0.0, 0.03)

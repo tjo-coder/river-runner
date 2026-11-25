@@ -8,6 +8,15 @@ One section per version, newest first. Each line is `Chinese | English`.
 CI takes the version from the top section (`## 0.4` builds 0.4.x) and copies that section into
 the GitHub release notes; the in-app "What's new" reads this file too.
 
+## 0.8 · 2026-11-25
+
+### 新增 | Added
+- 筹码压力：短码（约 15BB 及以下）更宽地全下，8BB 以下全下更宽；深码多跟注、多诈唬；筹码已经变少的对手不会一直弃牌 | Stack pressure: short stacks (about 15BB and under) shove wider, stacks under 8BB shove wider still, deep stacks call and bluff more, and a player whose stack is shrinking stops folding everything
+- 鱿鱼局（新练习和设置里可开关，默认关）：每一轮没赢过牌的人在结束时向赢过牌的人付罚金，越接近结束打得越凶；牌桌显示安全/未安全和剩余手数 | Squid mode (toggle on the new-game screen and in Settings, off by default): players who have not won a hand pay the ones who have when the round ends, play wider as it runs out, and the table shows safe / at risk plus the hands left
+
+### 改进 | Changed
+- 网页版资源使用相对路径，可以挂在 GitHub Pages 的项目网址下（例如 username.github.io/river-runner/） | Web assets use relative paths, so the app loads from a GitHub Pages project URL such as username.github.io/river-runner/
+
 ## 0.7 · 2026-11-22
 
 ### 新增 | Added

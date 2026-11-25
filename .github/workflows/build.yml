@@ -227,10 +227,18 @@ jobs:
           git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" screenshots
 
   # Web version (iPhone and other browsers): Wasm build with a JS fallback for older browsers.
-  # The log always goes to the web-logs branch; a successful build is published to gh-pages,
-  # which GitHub Pages serves at https://<owner>.github.io/<repo>/.
+  # The log always goes to the web-logs branch. A successful build of main is published two ways,
+  # so either Pages source works on a fork:
+  #   * the gh-pages branch (Settings → Pages → Deploy from a branch → gh-pages / root)
+  #   * the GitHub Actions artifact (Settings → Pages → Source: GitHub Actions)
+  # Assets are relative, so https://<owner>.github.io/<repo>/ resolves. Nothing here spends money
+  # or writes outside this repository.
   web:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
     steps:
       - uses: actions/checkout@v4
 
@@ -255,6 +263,24 @@ jobs:
             sleep 20
           done
           exit $status
+
+      - name: Check project-pages asset paths
+        run: |
+          # A root-absolute webpack public path 404s on https://<owner>.github.io/<repo>/.
+          [ -d web/build/dist ] || { echo "::error::web distribution not found"; exit 1; }
+          if grep -R -n -E '__webpack_require__\.p[[:space:]]*=[[:space:]]*"/"' web/build/dist; then
+            echo "::error::webpack publicPath is the domain root"
+            exit 1
+          fi
+          html=$(find web/build/dist -name index.html | head -1)
+          [ -n "$html" ] || { echo "::error::index.html missing from the web distribution"; exit 1; }
+          # index.html sets sc.src = "riverRunner.js" (relative). An absolute /riverRunner.js
+          # would miss the /<repo>/ prefix on project Pages.
+          grep -q 'riverRunner.js' "$html"
+          if grep -q 'src *= *"/riverRunner.js"' "$html"; then
+            echo "::error::index.html loads riverRunner.js from the domain root"
+            exit 1
+          fi
 
       - name: Report web build errors
         if: failure()
@@ -299,3 +325,20 @@ jobs:
           git init -q && git checkout -q -b gh-pages && git add -A
           git -c user.name="github-actions" -c user.email="github-actions@users.noreply.github.com" commit -qm "Web app ${GITHUB_SHA::7}"
           git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
+          # A root-absolute webpack public path breaks project pages (/<repo>/).
+          if grep -R -n -E '__webpack_require__\.p[[:space:]]*=[[:space:]]*"/"' . ; then
+            echo "::error::webpack publicPath is the domain root; project Pages would 404 assets"
+            exit 1
+          fi
+
+      - name: Upload GitHub Pages artifact
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: /tmp/site
+
+      - name: Deploy GitHub Pages
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        id: pages
+        continue-on-error: true
+        uses: actions/deploy-pages@v4

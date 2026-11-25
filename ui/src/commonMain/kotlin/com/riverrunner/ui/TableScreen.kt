@@ -220,6 +220,12 @@ private fun SidePanel(
             }
             Text(ui.blindsText, color = Palette.TextDim, fontSize = 11.sp, maxLines = 1)
             if (ui.levelText != null) Text(ui.levelText, color = Palette.Gold, fontSize = 11.sp, maxLines = 1)
+            if (ui.squidText != null) {
+                Text(
+                    ui.squidText, color = if (ui.squidHeroUnsafe) Palette.Red else Palette.Green,
+                    fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.Bold, maxLines = 2,
+                )
+            }
         }
         // middle: feedback on your last decision, then results, or practice info + action log
         Column(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(5.dp)) {
