@@ -1,0 +1,132 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :engine:kmpPartiallyResolvedDependenciesChecker
+> Task :engine:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :engine:jvmProcessResources NO-SOURCE
+> Task :engine:processJvmMainResources SKIPPED
+> Task :engine:jvmTestProcessResources
+> Task :engine:processJvmTestResources SKIPPED
+
+> Task :engine:compileKotlinJvm
+w: file:///home/runner/work/river-runner/river-runner/engine/src/commonMain/kotlin/com/riverrunner/engine/Session.kt:131:38 Condition is always 'false'.
+
+> Task :engine:compileJvmMainJava NO-SOURCE
+> Task :engine:jvmMainClasses
+> Task :engine:jvmJar
+> Task :engine:compileTestKotlinJvm
+> Task :engine:compileJvmTestJava NO-SOURCE
+> Task :engine:jvmTestClasses
+
+> Task :engine:jvmTest
+
+AchievementTest[jvm] > fullHouseShowdownAndBigWin()[jvm] PASSED
+
+AchievementTest[jvm] > suckoutAndHammer()[jvm] PASSED
+
+AchievementTest[jvm] > noStealFromUtg()[jvm] PASSED
+
+AchievementTest[jvm] > riverBluff()[jvm] PASSED
+
+AchievementTest[jvm] > unlockingAndSessions()[jvm] PASSED
+
+AchievementTest[jvm] > stealFromButton()[jvm] PASSED
+
+ChangelogTest[jvm] > repositoryChangelogIsWellFormed()[jvm] PASSED
+
+ChangelogTest[jvm] > parsesSectionsAndLanguages()[jvm] PASSED
+
+EngineTest[jvm] > foldReturnsUncalled()[jvm] PASSED
+
+EngineTest[jvm] > incompleteAllInDoesNotReopen()[jvm] PASSED
+
+EngineTest[jvm] > randomBotsConserveChips()[jvm] PASSED
+
+EngineTest[jvm] > sidePots()[jvm] PASSED
+
+EngineTest[jvm] > splitPotOddChip()[jvm] PASSED
+
+EngineTest[jvm] > minRaiseRules()[jvm] PASSED
+
+EngineTest[jvm] > headsUpBlindsAndOrder()[jvm] PASSED
+
+EquityIcmTest[jvm] > flopEnumeration()[jvm] PASSED
+
+EquityIcmTest[jvm] > aaVsKk()[jvm] PASSED
+
+EquityIcmTest[jvm] > icmBasics()[jvm] PASSED
+
+EvaluatorTest[jvm] > ordering()[jvm] PASSED
+
+EvaluatorTest[jvm] > categories()[jvm] PASSED
+
+EvaluatorTest[jvm] > bestFive()[jvm] PASSED
+
+ExportTest[jvm] > exportSeparatesUncalledReturnAndOmitsUnrecordedSquid()[jvm] PASSED
+
+FunAchievementTest[jvm] > foldStreak()[jvm] PASSED
+
+FunAchievementTest[jvm] > acesCrackedAllInAsFavourite()[jvm] PASSED
+
+FunAchievementTest[jvm] > bluffCaughtAndKicker()[jvm] PASSED
+
+PenaltyScaleTest[jvm] > percentSettlementConservesAndCaps()[jvm] PASSED
+
+PenaltyScaleTest[jvm] > percentUsesStartingStackAndIgnoresLaterBlinds()[jvm] PASSED
+
+PenaltyScaleTest[jvm] > urgencyFollowsPenaltyAndNotSafePlayers()[jvm] PASSED
+
+PenaltyScaleTest[jvm] > legacyBlindIsNotReadAsPercent()[jvm] PASSED
+
+PressureTest[jvm] > depthShrinkingAndSquidMoveTheKnobs()[jvm] PASSED
+
+PressureTest[jvm] > squidUrgencyRampsAndResets()[jvm] PASSED
+
+PressureTest[jvm] > pressureKeepsStyleOrder()[jvm] PASSED
+
+PressureTest[jvm] > sessionAppliesSquidWithoutBreakingRecordsOrChipTotal()[jvm] PASSED
+
+PressureTest[jvm] > uncalledReturnDoesNotMakeTheLoserSafe()[jvm] PASSED
+
+PressureTest[jvm] > pressureLowersPreflopFoldRateForEveryStyle()[jvm] PASSED
+
+PressureTest[jvm] > squidPenaltyConservesChipsAndCapsAtTheStack()[jvm] PASSED
+
+PressureTest[jvm] > stylesAreUnchanged()[jvm] PASSED
+
+PressureTest[jvm] > shortStackShovesAndShrinkingStackStopsFolding()[jvm] PASSED
+
+PressureTest[jvm] > sidePotSplitAndFoldWinners()[jvm] PASSED
+
+RecordTest[jvm] > roundTripAndReplay()[jvm] PASSED
+
+SessionTest[jvm] > tournamentFinishes()[jvm] PASSED
+
+SessionTest[jvm] > cashSessionRuns()[jvm] PASSED
+
+SizeClassTest[jvm] > bucketsByPotFraction()[jvm] PASSED
+
+SizeClassTest[jvm] > botBetsMixSizes()[jvm] PASSED
+
+TrainingTest[jvm] > styleMixFillsSeatsAndTrims()[jvm] PASSED
+
+TrainingTest[jvm] > styleMixRoundTrip()[jvm] PASSED
+
+TrainingTest[jvm] > seatStatsCountVpipPfrAndAggression()[jvm] PASSED
+
+TrainingTest[jvm] > deviationJudgesActionAndSize()[jvm] PASSED
+
+TrainingTest[jvm] > tallyCountsByStreetAndPosition()[jvm] PASSED
+
+TrainingTest[jvm] > sessionUsesTheMix()[jvm] PASSED
+gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_2-1795655182217.json
+
+[Incubating] Problems report is available at: file:///home/runner/work/river-runner/river-runner/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 30s
+6 actionable tasks: 6 executed
